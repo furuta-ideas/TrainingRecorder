@@ -3,7 +3,7 @@ import {createReadStream,statSync} from "node:fs";
 import {fileURLToPath} from "node:url";
 import path from "node:path";
 const root=fileURLToPath(new URL("./dist/",import.meta.url));
-const types={".html":"text/html; charset=utf-8",".js":"text/javascript; charset=utf-8",".css":"text/css; charset=utf-8",".json":"application/json; charset=utf-8",".png":"image/png",".mp4":"video/mp4"};
+const types={".html":"text/html; charset=utf-8",".js":"text/javascript; charset=utf-8",".css":"text/css; charset=utf-8",".json":"application/json; charset=utf-8",".webmanifest":"application/manifest+json; charset=utf-8",".png":"image/png",".mp4":"video/mp4"};
 http.createServer((req,res)=>{
   try{
     const pathname=decodeURIComponent(new URL(req.url,"http://localhost").pathname);

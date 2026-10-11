@@ -1,0 +1,279 @@
+{
+  "schemaVersion": 1,
+  "sourceUpdated": "2026-10-11",
+  "menus": [
+    {
+      "id": "4f1ddd28-ac51-44f8-9ccc-eb7bfefeb545",
+      "name": "リラックス呼吸",
+      "prescription": "1セット × 1分",
+      "tips": "正座で手を前につき、背中を丸める。5秒吸う→5秒吐く→5秒止める×4回。",
+      "images": [
+        {
+          "src": "media/p01_Relax_Breathing.png",
+          "notionRef": "notion-file-block://4f1ddd28-ac51-44f8-9ccc-eb7bfefeb545/39bbf96e-0105-47a1-8739-66ffe3a1c9e6?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=p01_Relax_Breathing.png"
+        }
+      ],
+      "video": null,
+      "durationNote": "1分",
+      "needsConfirmation": false,
+      "summaryTip": "正座で、5秒吸う→吐く→止める×4"
+    },
+    {
+      "id": "37dfdbb2-67e2-48fa-8f03-7eae29f5b8ea",
+      "name": "ポールで胸椎を動かす",
+      "prescription": "1セット × 10回",
+      "tips": "ポールを肩甲骨付近に当て、頭の後ろで手を組む。息を吐いて沈む。胸は開くが、腰は反らさない。",
+      "images": [
+        {
+          "src": "media/p02_Mobi_Thoracic_FR.png",
+          "notionRef": "notion-file-block://37dfdbb2-67e2-48fa-8f03-7eae29f5b8ea/cec6e044-1167-4053-a693-343c5d840b7e?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=p02_Mobi_Thoracic_FR.png"
+        }
+      ],
+      "video": {
+        "src": "media/02_Mobi_Thoracic_FR.mp4",
+        "notionRef": "notion-file-block://53741720-390f-4aa8-864a-26ee80177261/1022c203-e99d-4880-8ce3-4456ec7a9a08?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=02_Mobi_Thoracic_FR.mp4"
+      },
+      "durationNote": "時間指定なし",
+      "needsConfirmation": false,
+      "summaryTip": "肩甲骨にポール。腰は反らさない"
+    },
+    {
+      "id": "36788e44-1240-4da7-ab9c-3a28b111f7df",
+      "name": "キャット&カウ",
+      "prescription": "1セット × 10回",
+      "tips": "肩の真下に手。お尻から順番に背中を丸める。背骨を一つずつ動かす意識。顎を引き、首を長く。",
+      "images": [
+        {
+          "src": "media/p03_Mobi_Cow_Cat.png",
+          "notionRef": "notion-file-block://36788e44-1240-4da7-ab9c-3a28b111f7df/097c20ea-f52a-4ac8-8729-d9829cae7816?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=p03_Mobi_Cow_Cat.png"
+        }
+      ],
+      "video": {
+        "src": "media/03_Mobi_Cow_Cat.mp4",
+        "notionRef": "notion-file-block://b073eb73-a935-497e-8424-b84176dae549/98374078-72a9-430b-a350-2f466b37a781?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=03_Mobi_Cow_Cat.mp4"
+      },
+      "durationNote": "時間指定なし",
+      "needsConfirmation": false,
+      "summaryTip": "お尻から背骨を一つずつ丸める"
+    },
+    {
+      "id": "c8b3c480-29ed-41ab-a9df-4f3765efe9d2",
+      "name": "肋骨を開いて、閉じる呼吸",
+      "prescription": "1セット × 10回",
+      "tips": "5秒吐く→10秒止める→5秒吸う。肋骨をお腹の中心へ。力加減は「今より4割減」。",
+      "images": [
+        {
+          "src": "media/p04_Rib_Breathing.png",
+          "notionRef": "notion-file-block://c8b3c480-29ed-41ab-a9df-4f3765efe9d2/53f04ce0-0fea-4592-bf79-83fd0ce4b96d?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=p04_Rib_Breathing.png"
+        }
+      ],
+      "video": {
+        "src": "media/04_Rib_Breathing.mp4",
+        "notionRef": "notion-file-block://afb507f2-a211-4b49-a8f8-0b2b4ae9340f/f4bc6fad-cde9-481f-895d-81cc14316c19?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=04_Rib_Breathing.mp4"
+      },
+      "durationNote": "3分20秒",
+      "needsConfirmation": false,
+      "summaryTip": "5秒吐く→10秒止める→5秒吸う"
+    },
+    {
+      "id": "9ab2dd10-90f1-41fc-a2da-6cecf50319cc",
+      "name": "片足下ろし",
+      "prescription": "2セット × 10回",
+      "tips": "息を吐きながら片足をゆっくり下ろす。腰を浮かせず、肋骨の位置をキープ。",
+      "images": [
+        {
+          "src": "media/p05_Dead_bug.png",
+          "notionRef": "notion-file-block://9ab2dd10-90f1-41fc-a2da-6cecf50319cc/4c159467-c575-43f9-b431-af21c3a6ed0a?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=p05_Dead_bug.png"
+        }
+      ],
+      "video": {
+        "src": "media/05_Dead_bug_w_o_Arm.mp4",
+        "notionRef": "notion-file-block://fcc6da28-5a41-4f7f-a765-3fbc86f7d592/58195b8b-6857-41ae-abb2-542ee2d335be?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=05_Dead_bug_w_o_Arm.mp4"
+      },
+      "durationNote": "時間指定なし",
+      "needsConfirmation": false,
+      "summaryTip": "片足を下ろす。腰を浮かせない"
+    },
+    {
+      "id": "0efbc0aa-84fc-4752-8dc6-e6146db69ba7",
+      "name": "ブリッジ",
+      "prescription": "2セット × 10回",
+      "tips": "内ももにボールを挟む。かかとで床を押してお尻を上げる。肋骨を上げない。すねは床に対して垂直に。",
+      "images": [
+        {
+          "src": "media/p06_Bridge.png",
+          "notionRef": "notion-file-block://0efbc0aa-84fc-4752-8dc6-e6146db69ba7/fd46dfa2-9710-4fdb-86d7-f1177051fc82?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=p06_Bridge.png"
+        }
+      ],
+      "video": {
+        "src": "media/06_Bridge.mp4",
+        "notionRef": "notion-file-block://78811395-d022-46cd-8765-22b1a6dcb1b4/a3d6ab82-d75b-43ab-8233-531cfd45139b?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=06_Bridge.mp4"
+      },
+      "durationNote": "時間指定なし",
+      "needsConfirmation": false,
+      "summaryTip": "かかとで押し、肋骨を上げない"
+    },
+    {
+      "id": "b8d41ee5-a384-4215-8ffe-1edd75acf853",
+      "name": "プランク",
+      "prescription": "2セット × 30秒",
+      "tips": "フォームを教材で確認してください。",
+      "images": [
+        {
+          "src": "media/p07_Plank.png",
+          "notionRef": "notion-file-block://b8d41ee5-a384-4215-8ffe-1edd75acf853/72a10ff9-2e4e-425a-86ea-2ff04cb5c980?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=p07_Plank.png"
+        }
+      ],
+      "video": {
+        "src": "media/07_Plank.mp4",
+        "notionRef": "notion-file-block://fc22ba39-b1e4-48f1-8411-482eac56c988/624a1e95-fc5c-41c7-9eed-e30b23a9d815?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=07_Plank.mp4"
+      },
+      "durationNote": "30秒 × 2セット",
+      "needsConfirmation": false,
+      "summaryTip": "写真・動画でフォームを確認"
+    },
+    {
+      "id": "f428adb4-f8bb-4d35-88a1-2609910a4e6b",
+      "name": "寝姿勢で背骨をねじる",
+      "prescription": "1セット × 2回",
+      "tips": "腕が斜めに来たら、肩甲骨と背中を床へ近づける。腕だけでなく体全体を動かす。",
+      "images": [
+        {
+          "src": "media/p08_Trunk_Rot.png",
+          "notionRef": "notion-file-block://f428adb4-f8bb-4d35-88a1-2609910a4e6b/2506e7a2-648b-4ec2-929d-b3265d9000f1?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=p08_Trunk_Rot.png"
+        }
+      ],
+      "video": {
+        "src": "media/08_Active_St_Trunk_Rot.mp4",
+        "notionRef": "notion-file-block://0f11639c-53b9-49ff-8e41-077bcc514412/3b00ed5b-eb11-451e-aa6d-4374b05e28e4?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=08_Active_St_Trunk_Rot.mp4"
+      },
+      "durationNote": "時間指定なし",
+      "needsConfirmation": false,
+      "summaryTip": "肩甲骨と背中を床へ近づける"
+    },
+    {
+      "id": "b3ea6f96-2bad-42e7-9d9e-3ca208752736",
+      "name": "全身のラインを伸ばす",
+      "prescription": "1セット × 2回",
+      "tips": "フォームを教材で確認してください。",
+      "images": [
+        {
+          "src": "media/p09_Functional_Line.png",
+          "notionRef": "notion-file-block://b3ea6f96-2bad-42e7-9d9e-3ca208752736/6284cb38-4363-4fbf-b65c-de380c19d46f?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=p09_Functional_Line.png"
+        }
+      ],
+      "video": {
+        "src": "media/09_Active_St_Functional_Line.mp4",
+        "notionRef": "notion-file-block://2ec1d7eb-5fc1-4f2b-bbca-c4dc90513501/1b2186cc-9d5b-4f89-b85f-752aa2ff05bb?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=09_Active_St_Functional_Line.mp4"
+      },
+      "durationNote": "時間指定なし",
+      "needsConfirmation": false,
+      "summaryTip": "写真・動画でフォームを確認"
+    },
+    {
+      "id": "28a6acb6-4169-480d-b2ae-8f5121379854",
+      "name": "片膝立ちから全身ストレッチ",
+      "prescription": "1セット × 2回",
+      "tips": "片膝立ちでお尻に力を入れ、バンザイ・横移動・ねじり。",
+      "images": [
+        {
+          "src": "media/p10_World_Greatest.png",
+          "notionRef": "notion-file-block://28a6acb6-4169-480d-b2ae-8f5121379854/e55d9d7f-4748-4b9a-aae2-adb54da06b7a?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=p10_World_Greatest.png"
+        }
+      ],
+      "video": {
+        "src": "media/10_Active_St_World_Greatest.mp4",
+        "notionRef": "notion-file-block://460052ec-e5a4-49a0-ae87-2fa5709fe8a1/aae6d023-dc83-42ba-a32b-5c6765cee069?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=10_Active_St_World_Greatest.mp4"
+      },
+      "durationNote": "時間指定なし",
+      "needsConfirmation": false,
+      "summaryTip": "片膝立ち。バンザイ・横・ねじり"
+    },
+    {
+      "id": "31c1b520-7ca6-4461-96bc-55c0f8ab618a",
+      "name": "斜め腕立て伏せ",
+      "prescription": "2セット × 10回",
+      "tips": "頭から足まで一直線。腰を反らさず、姿勢を保つ。肘を脇へ近づける。",
+      "images": [
+        {
+          "src": "media/p11_Diagonal_Push_Up.png",
+          "notionRef": "notion-file-block://31c1b520-7ca6-4461-96bc-55c0f8ab618a/9a18bb32-376d-4f0d-8f49-8c3af262b67a?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=p11_Diagonal_Push_Up.png"
+        }
+      ],
+      "video": {
+        "src": "media/11_Diagonal_Push_Up.mp4",
+        "notionRef": "notion-file-block://ee594e5e-ab23-454b-976f-1941ac988fdb/7e1826cb-ef17-49e7-88ef-42486dc23291?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=11_Diagonal_Push_Up.mp4"
+      },
+      "durationNote": "時間指定なし",
+      "needsConfirmation": false,
+      "summaryTip": "全身を一直線。肘は脇へ"
+    },
+    {
+      "id": "c3940e30-cec6-4bde-a877-aa38d7788477",
+      "name": "肩甲骨の運動・水平方向",
+      "prescription": "1セット × 10回",
+      "tips": "腕を前へ伸ばした姿勢から、肘を後ろへ。",
+      "images": [
+        {
+          "src": "media/p12_Scap_Horizontal.png",
+          "notionRef": "notion-file-block://c3940e30-cec6-4bde-a877-aa38d7788477/6df3a197-c0dd-4041-9359-83fd6b70fba9?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=p12_Scap_Horizontal.png"
+        }
+      ],
+      "video": null,
+      "durationNote": "時間指定なし",
+      "needsConfirmation": true,
+      "summaryTip": "腕を前へ伸ばし、肘を後ろへ"
+    },
+    {
+      "id": "85d7ca8a-23ce-4520-bc92-0d5452f61545",
+      "name": "肩甲骨の運動・上下方向",
+      "prescription": "1セット × 10回",
+      "tips": "腕を上げた姿勢から、肘を曲げて下ろす。",
+      "images": [
+        {
+          "src": "media/p13_Scap_Frontal.png",
+          "notionRef": "notion-file-block://85d7ca8a-23ce-4520-bc92-0d5452f61545/2032e59b-b45e-4758-891d-4042cff08207?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=p13_Scap_Frontal.png"
+        }
+      ],
+      "video": null,
+      "durationNote": "時間指定なし",
+      "needsConfirmation": true,
+      "summaryTip": "腕を上げ、肘を曲げて下ろす"
+    },
+    {
+      "id": "a6a22584-ee27-4c32-b38e-0a1727a27be0",
+      "name": "ゴブレット姿勢のスクワット",
+      "prescription": "2セット × 10回",
+      "tips": "重りを胸の前に持ち、しゃがむ。",
+      "images": [
+        {
+          "src": "media/p14_SQ_Goblet_Posi.png",
+          "notionRef": "notion-file-block://a6a22584-ee27-4c32-b38e-0a1727a27be0/783fe703-1a95-4679-9ace-a1bf43f8669b?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=p14_SQ_Goblet_Posi.png"
+        }
+      ],
+      "video": {
+        "src": "media/14_SQ_Goblet_Posi.mp4",
+        "notionRef": "notion-file-block://ca0e4a4e-63c1-44cd-aa67-3b20b70c670b/d09c4637-668e-46a1-a974-e0df045f1f01?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=14_SQ_Goblet_Posi.mp4"
+      },
+      "durationNote": "時間指定なし",
+      "needsConfirmation": true,
+      "summaryTip": "重りを胸の前に持ち、しゃがむ"
+    },
+    {
+      "id": "2bd4ee3e-9846-44c4-be25-f46f03312c23",
+      "name": "GM",
+      "prescription": "2セット × 10回",
+      "tips": "棒を肩に担ぎ、上体を前へ倒す。",
+      "images": [
+        {
+          "src": "media/p15_GM.png",
+          "notionRef": "notion-file-block://2bd4ee3e-9846-44c4-be25-f46f03312c23/776725a0-2abe-4f03-9b9c-80797aec7c0d?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=p15_GM.png"
+        }
+      ],
+      "video": null,
+      "durationNote": "時間指定なし",
+      "needsConfirmation": true,
+      "summaryTip": "棒を肩に担ぎ、上体を前へ倒す"
+    }
+  ]
+}

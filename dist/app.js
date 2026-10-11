@@ -3,17 +3,21 @@ const $=id=>document.getElementById(id);
 const icons={prev:'<path d="M15 5l-7 7 7 7"/><path d="M4 5v14"/>',next:'<path d="M9 5l7 7-7 7"/><path d="M20 5v14"/>',mic:'<rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0014 0v-2M12 19v3M8 22h8"/>',off:'<path d="M3 3l18 18M9 9v3a3 3 0 005 2M9 5a3 3 0 016 0v5M5 10v2a7 7 0 0012 5M19 10v2M12 19v3M8 22h8"/>'};
 function svg(paths){return '<svg viewBox="0 0 24 24" aria-hidden="true">'+paths+'</svg>'}
 $("prev").innerHTML=svg(icons.prev);$("next").innerHTML=svg(icons.next);
-let db,menus=[],index=0,state={logs:[],sessions:{},learning:{},selectedId:null},recognition=null,listening=false,mediaUrls=[];
+let db,menus=[],index=0,state={logs:[],sessions:{},learning:{},selectedId:null},recognition=null,listening=false,mediaUrls=[],recognitionGeneration=0;
 const KEY="rbody-records-v1";
 function notify(message){$("notice").textContent=message}
 function persist(){try{localStorage.setItem(KEY,JSON.stringify(state));return true}catch{notify("保存領域が不足しています。記録を書き出してバックアップしてください。");return false}}
 const current=()=>menus[index];
 const session=()=>state.sessions[current().id]??(state.sessions[current().id]=freshSession(current().id));
 function saveMemo(){if(!current())return;session().memo=$("memo").value;persist()}
-function stopMic(){listening=false;const previous=recognition;recognition=null;previous?.abort()}
+function stopMic(){
+  listening=false;recognitionGeneration++;const previous=recognition;recognition=null;
+  if(previous){previous.onresult=null;previous.onerror=null;previous.onend=null;try{previous.abort()}catch{}}
+}
 function stopUnified(){if(current()&&session().runningSince!==null)toggle(session());stopMic();saveMemo();tick()}
 function toggleUnified(){
-  if(!current()||!$("memo").readOnly)return;
+  if(!current())return;
+  saveMemo();$("memo").readOnly=true;$("editMemo").textContent="手入力";
   if(session().runningSince!==null){stopUnified();return}
   toggle(session());persist();tick();startMic();
 }
@@ -30,7 +34,9 @@ function finish(){
 }
 function move(next){
   if(next<0||next>=menus.length||next===index)return;
-  finish();index=next;state.selectedId=current().id;persist();render();
+  finish();index=next;
+  if(session().runningSince!==null)toggle(session());
+  state.selectedId=current().id;persist();render();
 }
 function renderSummary(){
   const m=current();$("prescription").textContent=m.prescription+" ｜ "+m.durationNote;
@@ -86,12 +92,15 @@ function tick(){
   if(!current())return;const s=session(),running=s.runningSince!==null,mode=running?"running":s.startedAt!==null?"paused":"idle";
   $("clock").className="clock "+mode;$("elapsed").textContent=formatDuration(elapsed(s));
   $("timerState").textContent=running?"計測中":mode==="paused"?"一時停止":"待機中";
-  $("timerHint").textContent=running?"音声メモ欄をタップして停止":"音声メモ欄をタップして開始・再開";
+  $("timerHint").textContent=running?"時計・メモ欄をタップして停止":"時計・メモ欄をタップして開始・再開";
+  $("clock").setAttribute("aria-label",running?"音声メモと計測を停止":"音声メモと計測を開始・再開");
+  $("clock").setAttribute("aria-pressed",String(running));
   $("memo").classList.toggle("recording",running);
-  $("micStatus").textContent=running?(SpeechRecognition?"● 音声メモ・計測中":"● 計測中（音声入力非対応）"):mode==="paused"?"停止中 · メモ欄をタップで再開":"メモ欄をタップで開始";
+  $("micStatus").textContent=running?(SpeechRecognition?"● 音声メモ・計測中":"● 計測中（音声入力非対応）"):mode==="paused"?"音声OFF · タップで再開":"音声OFF · 時計・メモ欄をタップで開始";
   $("memo").setAttribute("aria-label",$("memo").readOnly?(running?"音声メモと計測を停止":"音声メモと計測を開始・再開"):"気づきメモを手入力");
 }
-$("memo").onclick=toggleUnified;
+$("clock").onclick=toggleUnified;
+$("memo").onclick=()=>{if($("memo").readOnly)toggleUnified()};
 $("memo").onkeydown=e=>{if($("memo").readOnly&&(e.key===" "||e.key==="Enter")){e.preventDefault();toggleUnified()}};
 $("editMemo").onclick=()=>{stopUnified();$("memo").readOnly=!$("memo").readOnly;$("editMemo").textContent=$("memo").readOnly?"手入力":"手入力を完了";tick();if(!$("memo").readOnly)$("memo").focus()};
 $("prev").onclick=()=>move(index-1);$("next").onclick=()=>move(index+1);$("finish").onclick=finish;
@@ -117,10 +126,13 @@ const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition
 function startMic(){
   if(!SpeechRecognition){notify("音声入力非対応のため計測のみ開始しました。「手入力」からメモを入力できます。");return}
   const r=new SpeechRecognition();recognition=r;r.lang="ja-JP";r.continuous=true;r.interimResults=true;
+  const generation=++recognitionGeneration,menuId=current().id;
+  const active=()=>listening&&recognition===r&&recognitionGeneration===generation&&current()?.id===menuId&&session().runningSince!==null;
   let base="",finalText="";
-  r.onresult=e=>{if(!listening||recognition!==r)return;let interim="";for(let i=e.resultIndex;i<e.results.length;i++){if(e.results[i].isFinal)finalText+=e.results[i][0].transcript+"。";else interim+=e.results[i][0].transcript}$("memo").value=base+finalText+interim;saveMemo()};
-  r.onerror=e=>{if(recognition!==r||e.error==="no-speech")return;stopUnified();notify(e.error==="not-allowed"?"マイクが許可されていないため音声入力と計測を停止しました。":"音声入力と計測を停止しました。マイク設定をご確認ください。")};
-  r.onend=()=>{if(listening&&recognition===r){base=$("memo").value+"\n";finalText="";try{r.start()}catch{stopUnified();notify("音声入力と計測を停止しました。メモ欄をタップして再開してください。")}}};
+  r.onstart=()=>{if(!active()){try{r.abort()}catch{}}};
+  r.onresult=e=>{if(!active())return;let interim="";for(let i=e.resultIndex;i<e.results.length;i++){if(e.results[i].isFinal)finalText+=e.results[i][0].transcript+"。";else interim+=e.results[i][0].transcript}$("memo").value=base+finalText+interim;saveMemo()};
+  r.onerror=e=>{if(!active()||e.error==="no-speech")return;stopUnified();notify(e.error==="not-allowed"?"マイクが許可されていないため音声入力と計測を停止しました。":"音声入力と計測を停止しました。マイク設定をご確認ください。")};
+  r.onend=()=>{if(active()){base=$("memo").value+"\n";finalText="";try{r.start()}catch{stopUnified();notify("音声入力と計測を停止しました。時計・メモ欄をタップして再開してください。")}}};
   base=$("memo").value+($("memo").value?"\n":"");
   try{listening=true;r.start()}catch{stopUnified();notify("音声入力を開始できませんでした。マイク設定をご確認ください。")}
 }

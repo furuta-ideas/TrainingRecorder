@@ -76,6 +76,22 @@ try{
   await page.setViewportSize({width:390,height:844});await page.screenshot({path:"qa-iphone.png",fullPage:true});
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
   for(const width of [320,768,1024]){await page.setViewportSize({width,height:900});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,"horizontal overflow at "+width)}
+  await page.selectOption("#menuSelect",{label:"片膝立ちから全身ストレッチ"});
+  await page.waitForFunction(()=>document.querySelector("#video").readyState>=2);
+  for(const viewport of [{width:1024,height:768},{width:1194,height:834},{width:768,height:1024},{width:1180,height:700},{width:1024,height:600}]){
+    await page.setViewportSize(viewport);
+    const layout=await page.evaluate(()=>{
+      const rect=id=>{const r=document.getElementById(id).getBoundingClientRect();return {top:r.top,bottom:r.bottom,left:r.left,right:r.right}};
+      return {memo:rect("memo"),clock:rect("clock"),export:rect("export"),manage:rect("manage"),header:document.querySelector(".appbar").getBoundingClientRect().bottom,height:innerHeight,width:innerWidth,documentHeight:document.documentElement.scrollHeight};
+    });
+    for(const id of ["memo","clock","export","manage"])assert.ok(layout[id].bottom<=layout.height&&layout[id].top>=0,id+" outside viewport "+JSON.stringify(viewport));
+    assert.ok(layout.export.top>layout.height/2,"export must be bottom right");
+    assert.ok(layout.manage.right>layout.width*.75,"menu must be on the right");
+    assert.ok(layout.documentHeight<=layout.height,"iPad page should fit height");
+    assert.equal(await page.locator(".appbar #name,.appbar #prev,.appbar #next,.appbar #menuSelect").count(),4);
+  }
+  await page.setViewportSize({width:1024,height:768});await page.screenshot({path:"qa-ipad-compact.png",fullPage:true});
+  await page.setViewportSize({width:768,height:1024});await page.screenshot({path:"qa-ipad-portrait.png",fullPage:true});
   await page.locator("#manage").click();await page.locator('[name=name]').fill("追加テスト");await page.locator('[name=prescription]').fill("1セット × 2回");await page.locator('[name=durationNote]').fill("30秒");await page.locator('[name=tips]').fill("背中を意識する");await page.locator('[type=submit]').click();
   await page.locator("#name").filter({hasText:"追加テスト"}).waitFor();assert.equal(await page.locator("#menuSelect option").count(),16);
   await page.reload();await page.locator("#name").filter({hasText:"追加テスト"}).waitFor();assert.equal(await page.locator("#menuSelect option").count(),16);

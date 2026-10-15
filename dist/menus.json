@@ -10,7 +10,23 @@
       "images": [
         {
           "src": "media/p01_Relax_Breathing.png",
-          "notionRef": "notion-file-block://4f1ddd28-ac51-44f8-9ccc-eb7bfefeb545/39bbf96e-0105-47a1-8739-66ffe3a1c9e6?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=p01_Relax_Breathing.png"
+          "notionRef": "notion-file-block://4f1ddd28-ac51-44f8-9ccc-eb7bfefeb545/39bbf96e-0105-47a1-8739-66ffe3a1c9e6?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=p01_Relax_Breathing.png",
+          "sourceWidth": 424,
+          "sourceHeight": 154,
+          "frames": [
+            {
+              "x": 3,
+              "y": 3,
+              "width": 202,
+              "height": 148
+            },
+            {
+              "x": 219,
+              "y": 3,
+              "width": 202,
+              "height": 148
+            }
+          ]
         }
       ],
       "video": null,
@@ -216,7 +232,23 @@
       "images": [
         {
           "src": "media/p12_Scap_Horizontal.png",
-          "notionRef": "notion-file-block://c3940e30-cec6-4bde-a877-aa38d7788477/6df3a197-c0dd-4041-9359-83fd6b70fba9?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=p12_Scap_Horizontal.png"
+          "notionRef": "notion-file-block://c3940e30-cec6-4bde-a877-aa38d7788477/6df3a197-c0dd-4041-9359-83fd6b70fba9?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=p12_Scap_Horizontal.png",
+          "sourceWidth": 424,
+          "sourceHeight": 154,
+          "frames": [
+            {
+              "x": 3,
+              "y": 3,
+              "width": 202,
+              "height": 148
+            },
+            {
+              "x": 219,
+              "y": 3,
+              "width": 202,
+              "height": 148
+            }
+          ]
         }
       ],
       "video": null,
@@ -232,7 +264,23 @@
       "images": [
         {
           "src": "media/p13_Scap_Frontal.png",
-          "notionRef": "notion-file-block://85d7ca8a-23ce-4520-bc92-0d5452f61545/2032e59b-b45e-4758-891d-4042cff08207?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=p13_Scap_Frontal.png"
+          "notionRef": "notion-file-block://85d7ca8a-23ce-4520-bc92-0d5452f61545/2032e59b-b45e-4758-891d-4042cff08207?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=p13_Scap_Frontal.png",
+          "sourceWidth": 424,
+          "sourceHeight": 154,
+          "frames": [
+            {
+              "x": 3,
+              "y": 3,
+              "width": 202,
+              "height": 148
+            },
+            {
+              "x": 219,
+              "y": 3,
+              "width": 202,
+              "height": 148
+            }
+          ]
         }
       ],
       "video": null,
@@ -267,7 +315,23 @@
       "images": [
         {
           "src": "media/p15_GM.png",
-          "notionRef": "notion-file-block://2bd4ee3e-9846-44c4-be25-f46f03312c23/776725a0-2abe-4f03-9b9c-80797aec7c0d?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=p15_GM.png"
+          "notionRef": "notion-file-block://2bd4ee3e-9846-44c4-be25-f46f03312c23/776725a0-2abe-4f03-9b9c-80797aec7c0d?space_id=147c10dc-c4e3-48c6-be71-c46c270e1518&name=p15_GM.png",
+          "sourceWidth": 424,
+          "sourceHeight": 154,
+          "frames": [
+            {
+              "x": 3,
+              "y": 3,
+              "width": 202,
+              "height": 148
+            },
+            {
+              "x": 219,
+              "y": 3,
+              "width": 202,
+              "height": 148
+            }
+          ]
         }
       ],
       "video": null,

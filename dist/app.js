@@ -12,9 +12,18 @@ const icons={
 const svg=paths=>'<svg viewBox="0 0 24 24" aria-hidden="true">'+paths+'</svg>';
 $("prev").innerHTML=svg(icons.prev);$("next").innerHTML=svg(icons.next);
 const KEY="rbody-records-v1",SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+function fitViewport(){document.documentElement.style.setProperty("--app-height",Math.floor(window.visualViewport?.height||window.innerHeight)+"px")}
+fitViewport();window.addEventListener("resize",fitViewport);window.visualViewport?.addEventListener("resize",fitViewport);
 let db,menus=[],index=0,state={logs:[],sessions:{},learning:{},selectedId:null};
 let recognition=null,listening=false,recognitionGeneration=0,mediaUrls=[],renderId=0;
 let sendingReport=false;
+const photoResize=new ResizeObserver(entries=>{
+  for(const entry of entries){
+    const gallery=entry.target;if(!gallery.classList.contains("split"))continue;
+    gallery.style.setProperty("--photo-cols",entry.contentRect.width/Math.max(1,entry.contentRect.height)>=202/148?2:1);
+  }
+});
+photoResize.observe($("photos"));
 const current=()=>menus[index];
 const session=()=>state.sessions[current().id]??(state.sessions[current().id]=freshSession(current().id));
 function notify(message){$("notice").textContent=message}
@@ -75,7 +84,7 @@ async function render(){
   $("name").textContent=m.name;$("position").textContent=(index+1)+" / "+menus.length;
   $("prev").disabled=index===0;$("next").disabled=index===menus.length-1;$("menuSelect").value=m.id;
   $("memo").value=session().memo;setEditing(false);renderSummary();tick();
-  $("photos").replaceChildren();$("mediaEmpty").hidden=true;
+  $("photos").replaceChildren();$("photos").classList.remove("split");$("mediaEmpty").hidden=true;
   $("video").hidden=true;$("photos").hidden=true;
   $("mediaStage").className="media-stage "+(m.video?"has-video":"has-photos");
   $("mediaLabel").textContent=m.video?"MOVIE":"PHOTO";
@@ -88,8 +97,21 @@ async function render(){
     $("photos").hidden=false;$("videoStatus").textContent="";
     for(const [i,asset] of m.images.entries()){
       const src=await assetURL(asset);if(generation!==renderId)return;if(!src)continue;
-      const figure=document.createElement("figure"),img=document.createElement("img");
-      img.src=src;img.alt=m.name+" フォーム "+(i+1);figure.append(img);$("photos").append(figure);
+      if(asset.frames?.length){
+        $("photos").classList.add("split");
+        for(const [frameIndex,frame] of asset.frames.entries()){
+          const figure=document.createElement("figure"),ns="http://www.w3.org/2000/svg",picture=document.createElementNS(ns,"svg"),image=document.createElementNS(ns,"image");
+          picture.setAttribute("viewBox",[frame.x,frame.y,frame.width,frame.height].join(" "));picture.setAttribute("role","img");picture.setAttribute("aria-label",m.name+" 写真 "+(frameIndex+1));
+          const defs=document.createElementNS(ns,"defs"),clip=document.createElementNS(ns,"clipPath"),rect=document.createElementNS(ns,"rect"),clipId="photo-"+generation+"-"+i+"-"+frameIndex;
+          clip.setAttribute("id",clipId);clip.setAttribute("clipPathUnits","userSpaceOnUse");
+          for(const key of ["x","y","width","height"])rect.setAttribute(key,frame[key]);
+          clip.append(rect);defs.append(clip);picture.append(defs);
+          image.setAttribute("href",src);image.setAttribute("width",asset.sourceWidth);image.setAttribute("height",asset.sourceHeight);image.setAttribute("clip-path","url(#"+clipId+")");picture.append(image);figure.append(picture);$("photos").append(figure);
+        }
+      }else{
+        const figure=document.createElement("figure"),img=document.createElement("img");
+        img.src=src;img.alt=m.name+" フォーム "+(i+1);figure.append(img);$("photos").append(figure);
+      }
     }
     $("mediaEmpty").hidden=$("photos").childElementCount>0;
   }
@@ -136,12 +158,12 @@ $("prev").onclick=()=>move(index-1);$("next").onclick=()=>move(index+1);
 $("menuSelect").onchange=e=>move(menus.findIndex(m=>m.id===e.target.value));
 $("video").onerror=()=>{$("videoStatus").textContent="動画を読み込めません。再読み込みしてください。"};
 async function sendDailyReport(){
-  if(sendingReport||!current())return;
+  if(sendingReport||!current())return {ok:false};
   stopTraining();
   const report=buildDailyReport(state.logs);
-  if(!report.count){notify("今日のトレーニング記録がありません。");return}
+  if(!report.count){notify("今日のトレーニング記録がありません。");return {ok:false,error:"今日のトレーニング記録がありません。"}}
   const fingerprint=JSON.stringify({subject:report.subject,body:report.body});
-  if(state.reportReceipts?.[report.dateKey]?.fingerprint===fingerprint){notify("今日の同じ内容のログは送信済みです。");return}
+  if(state.reportReceipts?.[report.dateKey]?.fingerprint===fingerprint){notify("今日の同じ内容のログは送信済みです。");return {ok:true,message:"今日の同じ内容のログは送信済みです。"}}
   sendingReport=true;$("endWorkout").disabled=true;$("endWorkout").textContent="メール送信中…";notify("今日のログを送信しています。");
   try{
     const todayLogs=state.logs.filter(log=>buildDailyReport([log]).count>0);
@@ -150,10 +172,30 @@ async function sendDailyReport(){
     if(!response.ok||result.status!=="accepted"||typeof result.messageId!=="string")throw Error(result.error||"メールを送信できませんでした。記録は保存済みです。");
     state.reportReceipts??={};state.reportReceipts[report.dateKey]={fingerprint,messageId:result.messageId,sentAt:Date.now()};persist();
     notify(report.to+" 宛てのメール送信を受け付けました。記録："+report.count+"件");
-  }catch(error){notify(error.name==="TimeoutError"?"送信結果を確認できませんでした。記録は保存済みです。同じ内容で再試行できます。":error.message)}
+    return {ok:true,message:"furuta.ideas@gmail.com 宛てのメール送信を受け付けました。"};
+  }catch(error){const message=error.name==="TimeoutError"?"送信結果を確認できませんでした。記録は保存済みです。同じ内容で再試行できます。":error.message;notify(message);return {ok:false,error:message}}
   finally{sendingReport=false;$("endWorkout").disabled=false;$("endWorkout").textContent="トレーニング終了"}
 }
-$("endWorkout").onclick=sendDailyReport;
+function closeWorkout(message){
+  stopTraining();$("video").pause();$("endDialog").close();$("closedMessage").textContent=message;
+  document.body.classList.add("workout-closed");$("closedScreen").hidden=false;
+  try{window.close()}catch{}
+}
+$("endWorkout").onclick=()=>{
+  stopTraining();const report=buildDailyReport(state.logs);
+  $("endMessage").textContent="今日の記録："+report.count+"件。記録はこの端末に保存しました。";
+  $("sendAndClose").disabled=false;$("skipAndClose").disabled=false;$("cancelEnd").disabled=false;$("endDialog").showModal();
+};
+$("sendAndClose").onclick=async()=>{
+  $("sendAndClose").disabled=true;$("skipAndClose").disabled=true;$("cancelEnd").disabled=true;$("endMessage").textContent="メールを送信しています…";
+  const result=await sendDailyReport();
+  if(result.ok)closeWorkout(result.message);
+  else{$("endMessage").textContent=(result.error||"送信できませんでした。")+" 記録は保存済みです。再試行するか、送信せず終了できます。";$("sendAndClose").disabled=false;$("skipAndClose").disabled=false;$("cancelEnd").disabled=false;}
+};
+$("skipAndClose").onclick=()=>closeWorkout("メールは送信していません。トレーニング記録はこの端末に保存されています。");
+$("cancelEnd").onclick=()=>$("endDialog").close();
+$("endDialog").addEventListener("cancel",event=>{if(sendingReport)event.preventDefault()});
+$("returnApp").onclick=()=>{document.body.classList.remove("workout-closed");$("closedScreen").hidden=true};
 window.addEventListener("pagehide",stopTraining);
 document.addEventListener("visibilitychange",()=>{if(document.hidden)stopTraining();else tick()});
 async function init(){

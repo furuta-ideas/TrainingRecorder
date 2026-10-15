@@ -7,7 +7,7 @@ try{
   const page=await browser.newPage({viewport:{width:1024,height:768}}),errors=[];
   page.on("pageerror",e=>errors.push(e.message));
   await page.addInitScript(()=>{
-    window.speechCalls={start:0,abort:0};
+    window.speechCalls={start:0,abort:0};window.closeAttempts=0;window.close=()=>{window.closeAttempts++};
     window.SpeechRecognition=class{
       start(){window.speechCalls.start++;window.testRecognition=this}
       abort(){window.speechCalls.abort++}
@@ -18,8 +18,8 @@ try{
   assert.equal(await page.locator("#menuSelect option").count(),15);
   assert.equal(await page.locator("#finish,#export,#manage,#date,#timerHint,#manager").count(),0);
   assert.equal(await page.locator(".appbar #prev,.appbar #next,.appbar #menuSelect").count(),0);
-  await page.locator("#photos img").waitFor({state:"visible"});
-  assert.ok(await page.locator("#photos img").evaluate(i=>i.complete&&i.naturalWidth>0));
+  await page.locator("#photos svg").first().waitFor({state:"visible"});
+  assert.equal(await page.locator("#photos svg").count(),2);assert.equal(await page.locator("#photos svg").first().getAttribute("viewBox"),"3 3 202 148");
   assert.equal(await page.locator("#mediaStage").evaluate(e=>getComputedStyle(e).backgroundColor),"rgb(255, 255, 255)");
   assert.equal(await page.locator("#video").isVisible(),false);
   assert.equal(await page.locator("#name").evaluate(e=>getComputedStyle(e).color),"rgb(0, 100, 181)");
@@ -71,7 +71,7 @@ try{
   await page.selectOption("#menuSelect",{label:"片膝立ちから全身ストレッチ"});
   await page.waitForFunction(()=>document.querySelector("#video").readyState>=2);
   for(const viewport of [{width:1024,height:768},{width:1194,height:834},{width:768,height:1024},{width:1180,height:700},{width:1024,height:600}]){
-    await page.setViewportSize(viewport);
+    await page.setViewportSize(viewport);await page.waitForFunction(()=>Math.abs(document.body.getBoundingClientRect().height-innerHeight)<1);
     const bounds=await page.evaluate(()=>Object.fromEntries(["memo","prev","next","menuSelect","startStop","clock","elapsed","endWorkout"].map(id=>{const r=document.getElementById(id).getBoundingClientRect();return [id,{top:r.top,bottom:r.bottom,left:r.left,right:r.right}]})));
     for(const [id,r] of Object.entries(bounds))assert.ok(r.bottom<=viewport.height&&r.top>=0,id+" outside "+JSON.stringify(viewport));
     assert.ok(bounds.startStop.bottom<=bounds.clock.top);assert.ok(bounds.clock.bottom<=bounds.elapsed.top);
@@ -82,28 +82,35 @@ try{
   }
   await page.setViewportSize({width:1024,height:768});await page.screenshot({path:"qa-training-video.png",fullPage:true});
   await page.selectOption("#menuSelect",{label:"リラックス呼吸"});
-  await page.locator("#photos img").waitFor({state:"visible"});await page.screenshot({path:"qa-training-photo.png",fullPage:true});
+  await page.locator("#photos svg").first().waitFor({state:"visible"});await page.screenshot({path:"qa-training-photo.png",fullPage:true});
   assert.equal(await page.locator("#elapsed").innerText(),"00:00","returning to menu starts a new visit");
   await page.reload();await page.locator("#name").filter({hasText:"リラックス呼吸"}).waitFor();
   assert.equal(await page.locator(".log-entry").count(),2);assert.equal(await page.locator("#startStop").getAttribute("aria-pressed"),"false");
   await page.locator("#endWorkout").click();
-  await page.waitForFunction(()=>document.querySelector("#notice").textContent.includes("未設定"));
+  assert.match(await page.locator("#endTitle").innerText(),/メールでトレーニング結果を送信しますか/);
+  await page.locator("#cancelEnd").click();assert.equal(await page.locator("#endDialog").isVisible(),false);
+  await page.locator("#endWorkout").click();await page.locator("#sendAndClose").click();
+  await page.waitForFunction(()=>document.querySelector("#endMessage").textContent.includes("未設定"));
   assert.equal(await page.locator(".log-entry").count(),2,"mail setup error must retain logs");
+  assert.equal(await page.locator("#endDialog").isVisible(),true);await page.locator("#skipAndClose").click();
+  assert.equal(await page.locator("#closedScreen").isVisible(),true);assert.match(await page.locator("#closedMessage").innerText(),/送信していません/);await page.locator("#returnApp").click();
   let requests=0,payload;
   await page.route("**/api/daily-report",async route=>{
     requests++;payload=route.request().postDataJSON();
     await route.fulfill({status:200,json:{status:"accepted",messageId:"mock-email-id"}});
   });
   await page.locator("#startStop").click();await page.waitForTimeout(1100);
-  await page.locator("#endWorkout").click();
-  await page.waitForFunction(()=>document.querySelector("#notice").textContent.includes("受け付けました"));
+  await page.locator("#endWorkout").click();await page.locator("#sendAndClose").click();
+  await page.waitForFunction(()=>!document.querySelector("#closedScreen").hidden);assert.match(await page.locator("#closedMessage").innerText(),/受け付けました/);await page.locator("#returnApp").click();
   assert.equal(await page.locator("#startStop").getAttribute("aria-pressed"),"false");
   assert.equal(payload.logs.length,3,"currently running menu must be saved before sending");
   assert.equal(await page.locator(".log-entry").count(),3);
-  await page.locator("#endWorkout").click();
+  await page.locator("#endWorkout").click();await page.locator("#sendAndClose").click();
+  await page.waitForFunction(()=>!document.querySelector("#closedScreen").hidden);await page.locator("#returnApp").click();
   assert.equal(requests,1,"same report must not be sent twice");
   assert.match(await page.locator("#notice").innerText(),/送信済み/);
-  for(const width of [320,390]){await page.setViewportSize({width,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true)}
+  for(const viewport of [{width:320,height:568},{width:375,height:667},{width:390,height:844},{width:430,height:750},{width:844,height:390}]){await page.setViewportSize(viewport);await page.waitForFunction(()=>Math.abs(document.body.getBoundingClientRect().height-innerHeight)<1);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth&&document.documentElement.scrollHeight<=innerHeight),true,"phone page overflow "+JSON.stringify(viewport));for(const id of ["memo","startStop","endWorkout","menuSelect"]){const r=await page.locator("#"+id).boundingBox();assert.ok(r.y+r.height<=viewport.height,id+" below screen "+JSON.stringify(viewport))}}
+  await page.setViewportSize({width:390,height:844});
   await page.screenshot({path:"qa-training-iphone.png",fullPage:true});
   assert.deepEqual(errors,[]);console.log("PASS: video-only media, full-size white photo area, explicit mic/edit controls, automatic logs, cumulative timer, reset on navigation, stale speech protection, persistence and iPad/iPhone layout");
 }finally{await browser.close()}

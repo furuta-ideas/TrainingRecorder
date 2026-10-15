@@ -9,4 +9,15 @@ const icon=await worker.fetch(new Request("https://training.example/icons/traini
 assert.equal(icon.status,200);assert.equal(icon.headers.get("content-type"),"image/png");
 const api=await worker.fetch(new Request("https://training.example/api/daily-report"),{});
 assert.equal(api.status,405);
+const originalFetch=globalThis.fetch;
+try{
+  globalThis.fetch=async(url,options)=>{
+    assert.ok(url.startsWith("https://raw.githubusercontent.com/furuta-ideas/TrainingRecorder/"));
+    assert.equal(options.headers.get("Range"),"bytes=0-1");
+    assert.equal(options.headers.get("Authorization"),null);
+    return new Response(null,{status:206,headers:{"Content-Type":"application/octet-stream","Content-Range":"bytes 0-1/100"}});
+  };
+  const media=await worker.fetch(new Request("https://training.example/media/02_Mobi_Thoracic_FR.mp4",{headers:{"Range":"bytes=0-1","Authorization":"not-forwarded"}}),{});
+  assert.equal(media.status,206);assert.equal(media.headers.get("Content-Type"),"video/mp4");
+}finally{globalThis.fetch=originalFetch}
 console.log("PASS: standalone Worker, HTML, icon and mail API");

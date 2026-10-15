@@ -12,6 +12,7 @@ export function createWorker(assets,media){
       try{
         const response=await fetch(media[pathname],{method:request.method,headers,signal:AbortSignal.timeout(30000)});
         const outgoing=new Headers();for(const name of ["content-type","content-length","content-range","accept-ranges","etag"])if(response.headers.has(name))outgoing.set(name,response.headers.get(name));
+        outgoing.set("Content-Type",pathname.endsWith(".mp4")?"video/mp4":"image/png");
         outgoing.set("Cache-Control","public, max-age=86400");
         return new Response(response.body,{status:response.status,headers:outgoing});
       }catch{return new Response("Media temporarily unavailable",{status:502})}

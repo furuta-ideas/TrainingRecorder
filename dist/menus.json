@@ -38,7 +38,7 @@
       "id": "37dfdbb2-67e2-48fa-8f03-7eae29f5b8ea",
       "name": "ポールで胸椎を動かす",
       "prescription": "1セット × 10回",
-      "tips": "ポールを肩甲骨付近に当て、頭の後ろで手を組む。息を吐いて沈む。胸は開くが、腰は反らさない。",
+      "tips": "肩甲骨にポール。息を吐いて胸を開き、腰は反らさない。",
       "images": [
         {
           "src": "media/p02_Mobi_Thoracic_FR.png",
@@ -51,13 +51,16 @@
       },
       "durationNote": "時間指定なし",
       "needsConfirmation": false,
-      "summaryTip": "肩甲骨にポール。腰は反らさない"
+      "summaryTip": "肩甲骨にポール。腰は反らさない",
+      "trainerNote": "10/15：腰を固定し、背骨を一つずつ動かす",
+      "guidanceDate": "2026-10-15",
+      "guidanceSource": "https://app.notion.com/p/3f4cbc412aed80d7843cff3739c0a0a3#3f4cbc412aed80c886e9e8e0ea1d0a1a"
     },
     {
       "id": "36788e44-1240-4da7-ab9c-3a28b111f7df",
       "name": "キャット&カウ",
       "prescription": "1セット × 10回",
-      "tips": "肩の真下に手。お尻から順番に背中を丸める。背骨を一つずつ動かす意識。顎を引き、首を長く。",
+      "tips": "骨盤→腰→背中の順に丸める。反るときも腰を動かしすぎない。",
       "images": [
         {
           "src": "media/p03_Mobi_Cow_Cat.png",
@@ -70,13 +73,16 @@
       },
       "durationNote": "時間指定なし",
       "needsConfirmation": false,
-      "summaryTip": "お尻から背骨を一つずつ丸める"
+      "summaryTip": "お尻から背骨を一つずつ丸める",
+      "trainerNote": "10/15：背骨を一つずつ。仕事終わりにもケア",
+      "guidanceDate": "2026-10-15",
+      "guidanceSource": "https://app.notion.com/p/3f4cbc412aed80d7843cff3739c0a0a3#3f4cbc412aed80c886e9e8e0ea1d0a1a"
     },
     {
       "id": "c8b3c480-29ed-41ab-a9df-4f3765efe9d2",
       "name": "肋骨を開いて、閉じる呼吸",
       "prescription": "1セット × 10回",
-      "tips": "5秒吐く→10秒止める→5秒吸う。肋骨をお腹の中心へ。力加減は「今より4割減」。",
+      "tips": "5秒吐く→10秒止める→5秒吸う。肋骨を下げ、腰を反らさない。",
       "images": [
         {
           "src": "media/p04_Rib_Breathing.png",
@@ -89,13 +95,16 @@
       },
       "durationNote": "3分20秒",
       "needsConfirmation": false,
-      "summaryTip": "5秒吐く→10秒止める→5秒吸う"
+      "summaryTip": "5秒吐く→10秒止める→5秒吸う",
+      "trainerNote": "10/15：肋骨が前に出ないよう体幹でキープ",
+      "guidanceDate": "2026-10-15",
+      "guidanceSource": "https://app.notion.com/p/3f4cbc412aed80d7843cff3739c0a0a3#3f4cbc412aed80c886e9e8e0ea1d0a1a"
     },
     {
       "id": "9ab2dd10-90f1-41fc-a2da-6cecf50319cc",
       "name": "片足下ろし",
       "prescription": "2セット × 10回",
-      "tips": "息を吐きながら片足をゆっくり下ろす。腰を浮かせず、肋骨の位置をキープ。",
+      "tips": "息を吐いて片足をゆっくり下ろす。肋骨と腰の位置を保つ。",
       "images": [
         {
           "src": "media/p05_Dead_bug.png",
@@ -108,13 +117,16 @@
       },
       "durationNote": "時間指定なし",
       "needsConfirmation": false,
-      "summaryTip": "片足を下ろす。腰を浮かせない"
+      "summaryTip": "片足を下ろす。腰を浮かせない",
+      "trainerNote": "10/15：動かす部分と固定する部分を分ける",
+      "guidanceDate": "2026-10-15",
+      "guidanceSource": "https://app.notion.com/p/3f4cbc412aed80d7843cff3739c0a0a3#3f4cbc412aed80c886e9e8e0ea1d0a1a"
     },
     {
       "id": "0efbc0aa-84fc-4752-8dc6-e6146db69ba7",
       "name": "ブリッジ",
       "prescription": "2セット × 10回",
-      "tips": "内ももにボールを挟む。かかとで床を押してお尻を上げる。肋骨を上げない。すねは床に対して垂直に。",
+      "tips": "内ももにボール。かかとで押してお尻を上げ、肋骨は上げない。",
       "images": [
         {
           "src": "media/p06_Bridge.png",
@@ -127,13 +139,16 @@
       },
       "durationNote": "時間指定なし",
       "needsConfirmation": false,
-      "summaryTip": "かかとで押し、肋骨を上げない"
+      "summaryTip": "かかとで押し、肋骨を上げない",
+      "trainerNote": "10/15：体幹を保ち、腰を反らさない",
+      "guidanceDate": "2026-10-15",
+      "guidanceSource": "https://app.notion.com/p/3f4cbc412aed80d7843cff3739c0a0a3#3f4cbc412aed80c886e9e8e0ea1d0a1a"
     },
     {
       "id": "b8d41ee5-a384-4215-8ffe-1edd75acf853",
       "name": "プランク",
       "prescription": "2セット × 30秒",
-      "tips": "フォームを教材で確認してください。",
+      "tips": "肋骨を前に開かず、腰を反らさない。教材の姿勢で体幹を保つ。",
       "images": [
         {
           "src": "media/p07_Plank.png",
@@ -146,13 +161,16 @@
       },
       "durationNote": "30秒 × 2セット",
       "needsConfirmation": false,
-      "summaryTip": "写真・動画でフォームを確認"
+      "summaryTip": "写真・動画でフォームを確認",
+      "trainerNote": "10/15：さまざまな姿勢で体幹を安定させる",
+      "guidanceDate": "2026-10-15",
+      "guidanceSource": "https://app.notion.com/p/3f4cbc412aed80d7843cff3739c0a0a3#3f4cbc412aed80c886e9e8e0ea1d0a1a"
     },
     {
       "id": "f428adb4-f8bb-4d35-88a1-2609910a4e6b",
       "name": "寝姿勢で背骨をねじる",
       "prescription": "1セット × 2回",
-      "tips": "腕が斜めに来たら、肩甲骨と背中を床へ近づける。腕だけでなく体全体を動かす。",
+      "tips": "肩甲骨と背中を床へ。腕だけでなく体全体を動かす。",
       "images": [
         {
           "src": "media/p08_Trunk_Rot.png",
@@ -165,7 +183,10 @@
       },
       "durationNote": "時間指定なし",
       "needsConfirmation": false,
-      "summaryTip": "肩甲骨と背中を床へ近づける"
+      "summaryTip": "肩甲骨と背中を床へ近づける",
+      "trainerNote": "10/15：動かす部分と固定する部分を意識",
+      "guidanceDate": "2026-10-15",
+      "guidanceSource": "https://app.notion.com/p/3f4cbc412aed80d7843cff3739c0a0a3#3f4cbc412aed80c886e9e8e0ea1d0a1a"
     },
     {
       "id": "b3ea6f96-2bad-42e7-9d9e-3ca208752736",
@@ -190,7 +211,7 @@
       "id": "28a6acb6-4169-480d-b2ae-8f5121379854",
       "name": "片膝立ちから全身ストレッチ",
       "prescription": "1セット × 2回",
-      "tips": "片膝立ちでお尻に力を入れ、バンザイ・横移動・ねじり。",
+      "tips": "お尻と脇腹を使い、バンザイ・横移動・ねじり。左右とも行う。",
       "images": [
         {
           "src": "media/p10_World_Greatest.png",
@@ -203,13 +224,16 @@
       },
       "durationNote": "時間指定なし",
       "needsConfirmation": false,
-      "summaryTip": "片膝立ち。バンザイ・横・ねじり"
+      "summaryTip": "片膝立ち。バンザイ・横・ねじり",
+      "trainerNote": "10/15：鏡で姿勢を確認し、腰を反らさない",
+      "guidanceDate": "2026-10-15",
+      "guidanceSource": "https://app.notion.com/p/3f4cbc412aed80d7843cff3739c0a0a3#3f4cbc412aed80c886e9e8e0ea1d0a1a"
     },
     {
       "id": "31c1b520-7ca6-4461-96bc-55c0f8ab618a",
       "name": "斜め腕立て伏せ",
-      "prescription": "2セット × 10回",
-      "tips": "頭から足まで一直線。腰を反らさず、姿勢を保つ。肘を脇へ近づける。",
+      "prescription": "1セット × 10回目標",
+      "tips": "頭から足まで一直線。腰を反らさず、肘を脇へ近づける。",
       "images": [
         {
           "src": "media/p11_Diagonal_Push_Up.png",
@@ -222,7 +246,10 @@
       },
       "durationNote": "時間指定なし",
       "needsConfirmation": false,
-      "summaryTip": "全身を一直線。肘は脇へ"
+      "summaryTip": "全身を一直線。肘は脇へ",
+      "trainerNote": "10/15：準備運動後に1セット。追加3回は無理なく",
+      "guidanceDate": "2026-10-15",
+      "guidanceSource": "https://app.notion.com/p/3f4cbc412aed80d7843cff3739c0a0a3#3f4cbc412aed80c886e9e8e0ea1d0a1a"
     },
     {
       "id": "c3940e30-cec6-4bde-a877-aa38d7788477",

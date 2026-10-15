@@ -109,3 +109,9 @@ main{height:100%;min-height:0;grid-template-columns:minmax(0,1fr);grid-template-
 @media(min-width:651px) and (max-height:450px){.navigation{grid-template-columns:44px 44px minmax(0,1fr)}.navigation select{grid-column:auto;height:44px}.navigation .icon{width:44px;height:44px;min-height:44px}.start-stop{min-height:48px}.end-workout{min-height:44px}.control-panel{gap:3px;padding:4px}.log-heading{padding:3px 5px}.memo textarea{height:46px;min-height:46px;max-height:46px}.instructions{line-height:1.05}.appbar{min-height:48px}.appbar h1{font-size:20pt}}
 
 @media(max-width:650px){.clock{line-height:1.1}.elapsed{line-height:1.1}.elapsed strong{line-height:1.1}}
+
+.count-ten{width:100%;min-height:44px;padding:5px;font-size:13px;font-weight:700;background:#edf4fa;color:#215b8f}
+.count-ten[aria-pressed=true]{background:#258d66;color:#fff;border-color:#258d66}
+@media(max-width:650px){main{grid-template-rows:minmax(0,1fr) 258px}.log-pane{height:258px}.control-panel{gap:2px}.start-stop{min-height:44px}.count-ten{font-size:11px;min-height:44px}.clock{line-height:1}#wallClock{font-size:18pt}.elapsed{padding-top:1px;line-height:1}.elapsed strong{font-size:17px}}
+@media(max-width:650px) and (max-height:620px){main{grid-template-rows:minmax(0,1fr) 246px}.log-pane{height:246px}.control-panel{padding:3px;gap:1px}}
+@media(min-width:651px) and (max-height:450px){.clock{height:28px;padding:0;line-height:1}.clock #wallClock{font-size:20px;line-height:1}.elapsed{height:25px;padding-top:0;line-height:1}.elapsed strong{font-size:19px;line-height:1}.start-stop{min-height:44px}.log-heading{height:28px;min-height:28px}.count-ten{min-height:44px}}

@@ -7,6 +7,7 @@ try{
   const page=await browser.newPage({viewport:{width:1024,height:768}}),errors=[];
   page.on("pageerror",e=>errors.push(e.message));
   await page.addInitScript(()=>{
+    window.spoken=[];Object.defineProperty(window,"speechSynthesis",{value:{cancel(){},resume(){},getVoices(){return []},speak(u){if(u.text.trim())window.spoken.push(u.text)}}});window.SpeechSynthesisUtterance=class{constructor(text){this.text=text}};
     window.speechCalls={start:0,abort:0};window.closeAttempts=0;window.close=()=>{window.closeAttempts++};
     window.SpeechRecognition=class{
       start(){window.speechCalls.start++;window.testRecognition=this}
@@ -72,7 +73,7 @@ try{
   await page.waitForFunction(()=>document.querySelector("#video").readyState>=2);
   for(const viewport of [{width:1024,height:768},{width:1194,height:834},{width:768,height:1024},{width:1180,height:700},{width:1024,height:600}]){
     await page.setViewportSize(viewport);await page.waitForFunction(()=>Math.abs(document.body.getBoundingClientRect().height-innerHeight)<1);
-    const bounds=await page.evaluate(()=>Object.fromEntries(["memo","prev","next","menuSelect","startStop","clock","elapsed","endWorkout"].map(id=>{const r=document.getElementById(id).getBoundingClientRect();return [id,{top:r.top,bottom:r.bottom,left:r.left,right:r.right}]})));
+    const bounds=await page.evaluate(()=>Object.fromEntries(["memo","prev","next","menuSelect","startStop","clock","elapsed","countTen","endWorkout"].map(id=>{const r=document.getElementById(id).getBoundingClientRect();return [id,{top:r.top,bottom:r.bottom,left:r.left,right:r.right}]})));
     for(const [id,r] of Object.entries(bounds))assert.ok(r.bottom<=viewport.height&&r.top>=0,id+" outside "+JSON.stringify(viewport));
     assert.ok(bounds.startStop.bottom<=bounds.clock.top);assert.ok(bounds.clock.bottom<=bounds.elapsed.top);
     assert.ok(bounds.startStop.right>viewport.width*.75);
@@ -109,7 +110,21 @@ try{
   await page.waitForFunction(()=>!document.querySelector("#closedScreen").hidden);await page.locator("#returnApp").click();
   assert.equal(requests,1,"same report must not be sent twice");
   assert.match(await page.locator("#notice").innerText(),/送信済み/);
-  for(const viewport of [{width:320,height:568},{width:375,height:667},{width:390,height:844},{width:430,height:750},{width:844,height:390}]){await page.setViewportSize(viewport);await page.waitForFunction(()=>Math.abs(document.body.getBoundingClientRect().height-innerHeight)<1);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth&&document.documentElement.scrollHeight<=innerHeight),true,"phone page overflow "+JSON.stringify(viewport));for(const id of ["memo","startStop","endWorkout","menuSelect"]){const r=await page.locator("#"+id).boundingBox();assert.ok(r.y+r.height<=viewport.height,id+" below screen "+JSON.stringify(viewport))}}
+  for(const viewport of [{width:320,height:568},{width:375,height:667},{width:390,height:844},{width:430,height:750},{width:844,height:390}]){await page.setViewportSize(viewport);await page.waitForFunction(()=>Math.abs(document.body.getBoundingClientRect().height-innerHeight)<1);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth&&document.documentElement.scrollHeight<=innerHeight),true,"phone page overflow "+JSON.stringify(viewport));for(const id of ["memo","startStop","countTen","endWorkout","menuSelect"]){const r=await page.locator("#"+id).boundingBox();assert.ok(r.y+r.height<=viewport.height,id+" below screen "+JSON.stringify(viewport))}}
+  await page.selectOption("#menuSelect",{label:"斜め腕立て伏せ"});
+  assert.match(await page.locator("#prescription").innerText(),/1セット × 10回目標/);
+  assert.match(await page.locator("#learning").innerText(),/10\/15/);
+  await page.locator("#micToggle").click();await page.locator("#countTen").click();
+  assert.equal(await page.locator("#micToggle").getAttribute("aria-pressed"),"false");
+  assert.equal(await page.locator("#countTen").getAttribute("aria-pressed"),"true");
+  await page.waitForFunction(()=>document.querySelector("#countTenLabel").textContent.includes("10秒完了"),{},{timeout:13000});
+  assert.deepEqual(await page.evaluate(()=>window.spoken),["いち","に","さん","よん","ご","ろく","なな","はち","きゅう","じゅう"]);
+  assert.equal(await page.locator("#countTen").getAttribute("aria-pressed"),"false");
+  await page.locator("#countTen").click();await page.waitForTimeout(1100);await page.locator("#countTen").click();
+  const stoppedCount=await page.evaluate(()=>window.spoken.length);await page.waitForTimeout(1100);assert.equal(await page.evaluate(()=>window.spoken.length),stoppedCount);
+  await page.locator("#countTen").click();await page.locator("#next").click();assert.equal(await page.locator("#countTen").getAttribute("aria-pressed"),"false");
+  await page.locator("#countTen").click();await page.locator("#micToggle").click();assert.equal(await page.locator("#countTen").getAttribute("aria-pressed"),"false");
+  await page.locator("#micToggle").click();
   await page.setViewportSize({width:390,height:844});
   await page.screenshot({path:"qa-training-iphone.png",fullPage:true});
   assert.deepEqual(errors,[]);console.log("PASS: video-only media, full-size white photo area, explicit mic/edit controls, automatic logs, cumulative timer, reset on navigation, stale speech protection, persistence and iPad/iPhone layout");

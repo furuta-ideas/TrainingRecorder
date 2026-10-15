@@ -47,6 +47,7 @@ function writeLog(){
   persist();renderLogs();renderSummary();return true;
 }
 function stopTraining(){
+  stopCountTen();
   if(!current())return;
   if(session().runningSince!==null)toggle(session());
   stopMic();saveMemo();writeLog();tick();
@@ -66,7 +67,7 @@ function renderSummary(){
   const m=current();$("prescription").textContent=m.prescription+" ｜ "+m.durationNote;
   $("tip").textContent=m.tips;$("tip").title=m.tips;
   const notes=state.learning[m.id]||[];
-  $("learning").textContent=notes.length?"気づき："+summarize(notes.join("。"),46):m.needsConfirmation?"当日の個別説明は未確認":"呼吸とフォームを意識して、丁寧に。";
+  $("learning").textContent=notes.length?"気づき："+summarize(notes.join("。"),46):m.trainerNote||(m.needsConfirmation?"当日の個別説明は未確認":"呼吸とフォームを意識して、丁寧に。");
   $("learning").title=notes.slice(-3).join("\n");
 }
 function request(store,mode,fn){return new Promise((resolve,reject)=>{const tx=db.transaction(store,mode),req=fn(tx.objectStore(store));let result;req.onsuccess=()=>{result=req.result};tx.oncomplete=()=>resolve(result);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error)})}
@@ -138,6 +139,7 @@ function tick(){
   $("micStatus").textContent=listening?"● 音声入力中":"マイクOFF";$("memo").classList.toggle("recording",listening);
 }
 function startMic(){
+  stopCountTen();
   if(!SpeechRecognition){notify("音声入力に対応していません。鉛筆アイコンから手入力できます。");return}
   saveMemo();setEditing(false);
   const r=new SpeechRecognition();recognition=r;r.lang="ja-JP";r.continuous=true;r.interimResults=true;
@@ -150,6 +152,37 @@ function startMic(){
   r.onend=()=>{if(active()){base=$("memo").value+"\n";finalText="";try{r.start()}catch{stopMic();notify("音声入力を停止しました。マイクアイコンで再開できます。")}}};
   try{listening=true;r.start();tick();notify("")}catch{stopMic();notify("音声入力を開始できませんでした。マイク設定をご確認ください。")}
 }
+let countTenInterval=null,countTenStarted=0,countTenValue=0;
+const countWords=["いち","に","さん","よん","ご","ろく","なな","はち","きゅう","じゅう"];
+function stopCountTen(completed=false){
+  clearInterval(countTenInterval);countTenInterval=null;
+  if(!completed)window.speechSynthesis?.cancel();
+  $("countTen").setAttribute("aria-pressed","false");
+  $("countTenLabel").textContent=completed?"10秒完了・もう一度":"音声ON・10秒開始";
+  $("countTen").setAttribute("aria-label",completed?"10秒完了。音声ONでもう一度開始":"音声ON・10秒カウント開始");
+}
+function startCountTen(){
+  if(countTenInterval!==null){stopCountTen();return}
+  stopMic();saveMemo();
+  const synth=window.speechSynthesis,canSpeak=!!(synth&&window.SpeechSynthesisUtterance);
+  if(canSpeak){synth.cancel();synth.resume();const warmup=new SpeechSynthesisUtterance(" ");warmup.volume=0;synth.speak(warmup)}
+  notify(canSpeak?"1秒ごとに1〜10を読み上げます。マイクはOFFになります。":"音声読み上げに対応していません。画面で10秒を数えます。");
+  countTenStarted=performance.now();countTenValue=0;
+  $("countTen").setAttribute("aria-pressed","true");$("countTen").setAttribute("aria-label","10秒カウントを停止");$("countTenLabel").textContent="停止 0 / 10";
+  countTenInterval=setInterval(()=>{
+    const value=Math.min(10,Math.floor((performance.now()-countTenStarted)/1000));
+    if(value<=countTenValue)return;
+    countTenValue=value;$("countTenLabel").textContent="停止 "+value+" / 10";
+    if(canSpeak){
+      synth.cancel();const utterance=new SpeechSynthesisUtterance(countWords[value-1]);utterance.lang="ja-JP";utterance.rate=1.3;
+      const voice=synth.getVoices().find(v=>v.lang.startsWith("ja"));if(voice)utterance.voice=voice;
+      utterance.onerror=event=>{if(!["interrupted","canceled"].includes(event.error))notify("音声を再生できません。端末の音量を確認してください。画面のカウントは継続します。")};
+      synth.speak(utterance);
+    }
+    if(value===10){stopCountTen(true);notify("10秒カウントが完了しました。")}
+  },50);
+}
+$("countTen").onclick=startCountTen;
 $("startStop").onclick=toggleTraining;
 $("micToggle").onclick=()=>{if(listening){stopMic();saveMemo();if(session().logId)writeLog()}else startMic()};
 $("editMemo").onclick=()=>{stopMic();saveMemo();setEditing($("memo").readOnly);if(!$("memo").readOnly)$("memo").focus();else if(session().logId)writeLog()};

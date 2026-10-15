@@ -1,83 +1,100 @@
 import {elapsed,toggle,formatDuration,freshSession,summarize} from "./core.js";
 const $=id=>document.getElementById(id);
-const icons={prev:'<path d="M15 5l-7 7 7 7"/><path d="M4 5v14"/>',next:'<path d="M9 5l7 7-7 7"/><path d="M20 5v14"/>',mic:'<rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0014 0v-2M12 19v3M8 22h8"/>',off:'<path d="M3 3l18 18M9 9v3a3 3 0 005 2M9 5a3 3 0 016 0v5M5 10v2a7 7 0 0012 5M19 10v2M12 19v3M8 22h8"/>'};
-function svg(paths){return '<svg viewBox="0 0 24 24" aria-hidden="true">'+paths+'</svg>'}
+const icons={
+  prev:'<path d="M15 5l-7 7 7 7"/><path d="M4 5v14"/>',
+  next:'<path d="M9 5l7 7-7 7"/><path d="M20 5v14"/>',
+  mic:'<rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0014 0v-2M12 19v3M8 22h8"/>',
+  off:'<path d="M3 3l18 18M9 9v3a3 3 0 005 2M9 5a3 3 0 016 0v5M5 10v2a7 7 0 0012 5M19 10v2M12 19v3M8 22h8"/>',
+  edit:'<path d="M15 4l5 5M4 20l5-1L21 7a2 2 0 00-5-5L4 14z"/>',
+  check:'<path d="M5 12l4 4L20 5"/>'
+};
+const svg=paths=>'<svg viewBox="0 0 24 24" aria-hidden="true">'+paths+'</svg>';
 $("prev").innerHTML=svg(icons.prev);$("next").innerHTML=svg(icons.next);
-let db,menus=[],index=0,state={logs:[],sessions:{},learning:{},selectedId:null},recognition=null,listening=false,mediaUrls=[],recognitionGeneration=0;
-const KEY="rbody-records-v1";
-function notify(message){$("notice").textContent=message}
-function persist(){try{localStorage.setItem(KEY,JSON.stringify(state));return true}catch{notify("保存領域が不足しています。記録を書き出してバックアップしてください。");return false}}
+const KEY="rbody-records-v1",SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+let db,menus=[],index=0,state={logs:[],sessions:{},learning:{},selectedId:null};
+let recognition=null,listening=false,recognitionGeneration=0,mediaUrls=[],renderId=0;
 const current=()=>menus[index];
 const session=()=>state.sessions[current().id]??(state.sessions[current().id]=freshSession(current().id));
+function notify(message){$("notice").textContent=message}
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(state));return true}catch{notify("端末への保存ができません。ブラウザの保存領域をご確認ください。");return false}}
 function saveMemo(){if(!current())return;session().memo=$("memo").value;persist()}
 function stopMic(){
   listening=false;recognitionGeneration++;const previous=recognition;recognition=null;
   if(previous){previous.onresult=null;previous.onerror=null;previous.onend=null;try{previous.abort()}catch{}}
+  if(current())tick();
 }
-function stopUnified(){if(current()&&session().runningSince!==null)toggle(session());stopMic();saveMemo();tick()}
-function toggleUnified(){
-  if(!current())return;
-  saveMemo();$("memo").readOnly=true;$("editMemo").textContent="手入力";
-  if(session().runningSince!==null){stopUnified();return}
-  toggle(session());persist();tick();startMic();
-}
-function finish(){
-  stopUnified();saveMemo();const s=session(),duration=elapsed(s);
-  if(s.startedAt===null&&!s.memo.trim())return false;
-  const endedAt=Date.now();
-  state.logs.unshift({id:crypto.randomUUID(),menuId:current().id,name:current().name,startedAt:s.startedAt??endedAt,endedAt,duration,memo:s.memo.trim()});
-  if(s.memo.trim()){
-    const prior=state.learning[current().id]||[];
-    state.learning[current().id]=[...prior,s.memo.trim()].slice(-12);
+function writeLog(){
+  if(!current())return false;const s=session(),memo=s.memo.trim();
+  if(s.startedAt===null&&!memo)return false;
+  s.logId??=crypto.randomUUID();
+  const entry={id:s.logId,menuId:current().id,name:current().name,startedAt:s.startedAt??Date.now(),endedAt:Date.now(),duration:elapsed(s),memo};
+  const existing=state.logs.findIndex(log=>log.id===s.logId);
+  if(existing<0)state.logs.unshift(entry);else state.logs[existing]=entry;
+  if(memo&&memo!==s.learnedMemo){
+    state.learning[current().id]=[...new Set([...(state.learning[current().id]||[]),memo])].slice(-12);s.learnedMemo=memo;
   }
-  state.sessions[current().id]=freshSession(current().id);persist();$("memo").value="";renderLogs();renderSummary();tick();notify("トレーニングを保存しました。");return true;
+  persist();renderLogs();renderSummary();return true;
+}
+function stopTraining(){
+  if(!current())return;
+  if(session().runningSince!==null)toggle(session());
+  stopMic();saveMemo();writeLog();tick();
+}
+function toggleTraining(){
+  if(!current())return;
+  if(session().runningSince!==null){stopTraining();notify("実施時間とメモをログに自動保存しました。");return}
+  saveMemo();toggle(session());persist();tick();notify("");
 }
 function move(next){
   if(next<0||next>=menus.length||next===index)return;
-  finish();index=next;
-  if(session().runningSince!==null)toggle(session());
-  state.selectedId=current().id;persist();render();
+  stopTraining();state.sessions[current().id]=freshSession(current().id);
+  index=next;state.selectedId=current().id;state.sessions[current().id]=freshSession(current().id);
+  persist();render();notify("");
 }
 function renderSummary(){
   const m=current();$("prescription").textContent=m.prescription+" ｜ "+m.durationNote;
   $("tip").textContent=m.tips;$("tip").title=m.tips;
   const notes=state.learning[m.id]||[];
-  $("learning").textContent=notes.length?"気づき："+summarize(notes.join("。"),46):m.needsConfirmation?"当日の個別説明は未確認": "呼吸とフォームを意識して、丁寧に。";
+  $("learning").textContent=notes.length?"気づき："+summarize(notes.join("。"),46):m.needsConfirmation?"当日の個別説明は未確認":"呼吸とフォームを意識して、丁寧に。";
   $("learning").title=notes.slice(-3).join("\n");
 }
+function request(store,mode,fn){return new Promise((resolve,reject)=>{const tx=db.transaction(store,mode),req=fn(tx.objectStore(store));let result;req.onsuccess=()=>{result=req.result};tx.oncomplete=()=>resolve(result);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error)})}
+async function initDB(){db=await new Promise((resolve,reject)=>{const r=indexedDB.open("rbody-media-v1",1);r.onupgradeneeded=()=>{r.result.createObjectStore("assets");r.result.createObjectStore("menus",{keyPath:"id"})};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
 async function assetURL(asset){
   if(!asset)return null;
   if(asset.blobId){const blob=await request("assets","readonly",s=>s.get(asset.blobId));if(!blob)return null;const url=URL.createObjectURL(blob);mediaUrls.push(url);return url}
   return asset.src;
 }
-let renderId=0;
+function setEditing(editing){$("memo").readOnly=!editing;$("editMemo").innerHTML=svg(editing?icons.check:icons.edit);$("editMemo").setAttribute("aria-label",editing?"手入力を完了":"手入力する");$("editMemo").setAttribute("aria-pressed",String(editing))}
 async function render(){
-  const generation=++renderId;
+  const generation=++renderId,m=current();
   $("video").pause();$("video").removeAttribute("src");$("video").load();
   mediaUrls.forEach(URL.revokeObjectURL);mediaUrls=[];
-  const m=current();$("name").textContent=m.name;$("position").textContent="TRAINING "+String(index+1).padStart(2,"0")+" / "+String(menus.length).padStart(2,"0");
+  $("name").textContent=m.name;$("position").textContent=(index+1)+" / "+menus.length;
   $("prev").disabled=index===0;$("next").disabled=index===menus.length-1;$("menuSelect").value=m.id;
-  $("memo").value=session().memo;$("memo").readOnly=true;$("editMemo").textContent="手入力";renderSummary();tick();
-  $("photos").replaceChildren();
-  for(const [i,a] of m.images.entries()){
-    const src=await assetURL(a);if(generation!==renderId)return;
-    const figure=document.createElement("figure");figure.className="training-photo";
-    const img=document.createElement("img");img.src=src;img.alt=m.name+" フォーム "+(i+1);img.onerror=()=>{img.alt="教材を読み込めませんでした"};
-    const caption=document.createElement("figcaption");caption.textContent="フォーム "+(i+1);figure.append(img,caption);$("photos").append(figure);
-  }
-  const src=await assetURL(m.video);if(generation!==renderId)return;
-  $("video").hidden=!src;$("noVideo").hidden=!!src;$("noVideo").replaceChildren();
-  if(src){
-    $("video").src=src;$("videoStatus").textContent="● 繰り返し再生";
-    $("video").play().catch(()=>{$("videoStatus").textContent="再生ボタンをタップしてください"});
+  $("memo").value=session().memo;setEditing(false);renderSummary();tick();
+  $("photos").replaceChildren();$("mediaEmpty").hidden=true;
+  $("video").hidden=true;$("photos").hidden=true;
+  $("mediaStage").className="media-stage "+(m.video?"has-video":"has-photos");
+  $("mediaLabel").textContent=m.video?"MOVIE":"PHOTO";
+  if(m.video){
+    const src=await assetURL(m.video);if(generation!==renderId)return;
+    if(!src){$("mediaEmpty").hidden=false;return}
+    $("video").src=src;$("video").hidden=false;$("videoStatus").textContent="繰り返し再生";
+    $("video").play().catch(()=>{if(generation===renderId)$("videoStatus").textContent="再生ボタンをタップしてください"});
   }else{
-    const img=document.createElement("img");const photo=await assetURL(m.images[0]);if(photo)img.src=photo;else img.hidden=true;img.alt=m.name;
-    const p=document.createElement("p");p.textContent="この種目の動画は未登録です。静止画でフォームを確認できます。";$("noVideo").append(img,p);$("videoStatus").textContent="静止画教材";
+    $("photos").hidden=false;$("videoStatus").textContent="";
+    for(const [i,asset] of m.images.entries()){
+      const src=await assetURL(asset);if(generation!==renderId)return;if(!src)continue;
+      const figure=document.createElement("figure"),img=document.createElement("img");
+      img.src=src;img.alt=m.name+" フォーム "+(i+1);figure.append(img);$("photos").append(figure);
+    }
+    $("mediaEmpty").hidden=$("photos").childElementCount>0;
   }
 }
 function renderLogs(){
   $("count").textContent=state.logs.length;$("logs").replaceChildren();
-  if(!state.logs.length){const empty=document.createElement("div");empty.className="empty";empty.innerHTML=svg('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/>')+"今日の一歩を、ここに。<br>計測してメニューを移動すると<br>記録が積み重なります。";$("logs").append(empty);return}
+  if(!state.logs.length){const p=document.createElement("p");p.className="empty";p.textContent="終了・メニュー移動時に自動保存されます。";$("logs").append(p);return}
   for(const log of state.logs){
     const el=document.createElement("article");el.className="log-entry";
     const time=document.createElement("time"),d=new Date(log.startedAt);time.dateTime=d.toISOString();time.textContent=(d.getMonth()+1)+"/"+d.getDate()+" "+d.toLocaleTimeString("ja-JP",{hour12:false,hour:"2-digit",minute:"2-digit",second:"2-digit"});
@@ -89,78 +106,44 @@ function renderLogs(){
 }
 function tick(){
   $("wallClock").textContent=new Date().toLocaleTimeString("ja-JP",{hour12:false,hour:"2-digit",minute:"2-digit",second:"2-digit"});
-  if(!current())return;const s=session(),running=s.runningSince!==null,mode=running?"running":s.startedAt!==null?"paused":"idle";
-  $("clock").className="clock "+mode;$("elapsed").textContent=formatDuration(elapsed(s));
-  $("timerState").textContent=running?"計測中":mode==="paused"?"一時停止":"待機中";
-  $("timerHint").textContent=running?"時計・メモ欄をタップして停止":"時計・メモ欄をタップして開始・再開";
-  $("clock").setAttribute("aria-label",running?"音声メモと計測を停止":"音声メモと計測を開始・再開");
-  $("clock").setAttribute("aria-pressed",String(running));
-  $("memo").classList.toggle("recording",running);
-  $("micStatus").textContent=running?(SpeechRecognition?"● 音声メモ・計測中":"● 計測中（音声入力非対応）"):mode==="paused"?"音声OFF · タップで再開":"音声OFF · 時計・メモ欄をタップで開始";
-  $("memo").setAttribute("aria-label",$("memo").readOnly?(running?"音声メモと計測を停止":"音声メモと計測を開始・再開"):"気づきメモを手入力");
+  if(!current())return;const running=session().runningSince!==null;
+  $("startStop").classList.toggle("running",running);$("startStop").textContent=running?"終了":"開始";$("startStop").setAttribute("aria-pressed",String(running));
+  $("elapsed").textContent=formatDuration(elapsed(session()));
+  $("micToggle").innerHTML=svg(listening?icons.off:icons.mic);$("micToggle").classList.toggle("recording",listening);
+  $("micToggle").setAttribute("aria-label",listening?"音声メモを停止":"音声メモを開始");$("micToggle").setAttribute("aria-pressed",String(listening));
+  $("micStatus").textContent=listening?"● 音声入力中":"マイクOFF";$("memo").classList.toggle("recording",listening);
 }
-$("clock").onclick=toggleUnified;
-$("memo").onclick=()=>{if($("memo").readOnly)toggleUnified()};
-$("memo").onkeydown=e=>{if($("memo").readOnly&&(e.key===" "||e.key==="Enter")){e.preventDefault();toggleUnified()}};
-$("editMemo").onclick=()=>{stopUnified();$("memo").readOnly=!$("memo").readOnly;$("editMemo").textContent=$("memo").readOnly?"手入力":"手入力を完了";tick();if(!$("memo").readOnly)$("memo").focus()};
-$("prev").onclick=()=>move(index-1);$("next").onclick=()=>move(index+1);$("finish").onclick=finish;
-$("menuSelect").onchange=e=>move(menus.findIndex(m=>m.id===e.target.value));$("memo").oninput=saveMemo;
-$("video").onerror=()=>{$("videoStatus").textContent="動画を読み込めませんでした。静止画またはNotionをご確認ください。"};
-$("manage").onclick=()=>{stopUnified();$("manager").showModal()};$("closeManager").onclick=()=>$("manager").close();
-function request(store,mode,fn){return new Promise((resolve,reject)=>{const tx=db.transaction(store,mode),req=fn(tx.objectStore(store));let result;req.onsuccess=()=>{result=req.result};tx.oncomplete=()=>resolve(result);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error)})}
-async function initDB(){db=await new Promise((resolve,reject)=>{const r=indexedDB.open("rbody-media-v1",1);r.onupgradeneeded=()=>{r.result.createObjectStore("assets");r.result.createObjectStore("menus",{keyPath:"id"})};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
-function fillSelect(){ $("menuSelect").replaceChildren(...menus.map(m=>{const o=document.createElement("option");o.value=m.id;o.textContent=m.name;return o}))}
-$("addForm").onsubmit=async e=>{
-  e.preventDefault();const form=e.target,button=form.querySelector('[type=submit]');button.disabled=true;
-  try{
-    if(!db)throw Error("このブラウザでは教材の保存が使えません。Safariで開いてください。");
-    const data=new FormData(form),images=[],id=crypto.randomUUID();
-    async function keep(file){const blobId=crypto.randomUUID();await request("assets","readwrite",s=>s.put(file,blobId));return {blobId,name:file.name}}
-    for(const file of data.getAll("photos"))if(file.size)images.push(await keep(file));
-    const vf=data.get("video"),video=vf.size?await keep(vf):null;
-    const menu={id,name:data.get("name").trim(),prescription:data.get("prescription").trim(),durationNote:data.get("durationNote").trim(),tips:data.get("tips").trim(),images,video,needsConfirmation:false};
-    await request("menus","readwrite",s=>s.put(menu));menus.push(menu);fillSelect();form.reset();$("manager").close();move(menus.length-1);notify("メニューを追加しました。教材はこの端末に保存されます。");
-  }catch(error){$("addStatus").textContent="追加できませんでした："+error.message}finally{button.disabled=false}
-};
-const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
 function startMic(){
-  if(!SpeechRecognition){notify("音声入力非対応のため計測のみ開始しました。「手入力」からメモを入力できます。");return}
+  if(!SpeechRecognition){notify("音声入力に対応していません。鉛筆アイコンから手入力できます。");return}
+  saveMemo();setEditing(false);
   const r=new SpeechRecognition();recognition=r;r.lang="ja-JP";r.continuous=true;r.interimResults=true;
   const generation=++recognitionGeneration,menuId=current().id;
-  const active=()=>listening&&recognition===r&&recognitionGeneration===generation&&current()?.id===menuId&&session().runningSince!==null;
-  let base="",finalText="";
+  const active=()=>listening&&recognition===r&&recognitionGeneration===generation&&current()?.id===menuId;
+  let base=$("memo").value+($("memo").value?"\n":""),finalText="";
   r.onstart=()=>{if(!active()){try{r.abort()}catch{}}};
-  r.onresult=e=>{if(!active())return;let interim="";for(let i=e.resultIndex;i<e.results.length;i++){if(e.results[i].isFinal)finalText+=e.results[i][0].transcript+"。";else interim+=e.results[i][0].transcript}$("memo").value=base+finalText+interim;saveMemo()};
-  r.onerror=e=>{if(!active()||e.error==="no-speech")return;stopUnified();notify(e.error==="not-allowed"?"マイクが許可されていないため音声入力と計測を停止しました。":"音声入力と計測を停止しました。マイク設定をご確認ください。")};
-  r.onend=()=>{if(active()){base=$("memo").value+"\n";finalText="";try{r.start()}catch{stopUnified();notify("音声入力と計測を停止しました。時計・メモ欄をタップして再開してください。")}}};
-  base=$("memo").value+($("memo").value?"\n":"");
-  try{listening=true;r.start()}catch{stopUnified();notify("音声入力を開始できませんでした。マイク設定をご確認ください。")}
+  r.onresult=e=>{if(!active())return;let interim="";for(let i=e.resultIndex;i<e.results.length;i++){if(e.results[i].isFinal)finalText+=e.results[i][0].transcript+"。";else interim+=e.results[i][0].transcript}$("memo").value=base+finalText+interim;saveMemo();if(session().logId)writeLog()};
+  r.onerror=e=>{if(!active()||e.error==="no-speech")return;stopMic();saveMemo();notify(e.error==="not-allowed"?"マイクの許可をご確認ください。時間計測は開始／終了ボタンで操作できます。":"音声入力を停止しました。鉛筆アイコンから手入力できます。")};
+  r.onend=()=>{if(active()){base=$("memo").value+"\n";finalText="";try{r.start()}catch{stopMic();notify("音声入力を停止しました。マイクアイコンで再開できます。")}}};
+  try{listening=true;r.start();tick();notify("")}catch{stopMic();notify("音声入力を開始できませんでした。マイク設定をご確認ください。")}
 }
-$("export").onclick=()=>{
-  saveMemo();const blob=new Blob([JSON.stringify({schemaVersion:1,exportedAt:new Date().toISOString(),state,customMenus:menus.filter(m=>m.images.some(a=>a.blobId)||m.video?.blobId)},null,2)],{type:"application/json"});
-  const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="rbody-records-"+new Date().toISOString().slice(0,10)+".json";a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);notify("記録を書き出しました。追加教材のファイル自体は含まれません。");
-};
-$("restore").onchange=async e=>{
-  const file=e.target.files[0];if(!file)return;
-  try{const data=JSON.parse(await file.text());if(data.schemaVersion!==1||!Array.isArray(data.state?.logs))throw Error("対応していない形式です");
-    const valid=data.state.logs.every(l=>typeof l.id==="string"&&typeof l.name==="string"&&typeof l.memo==="string"&&Number.isFinite(l.startedAt)&&Number.isFinite(l.duration)&&l.duration>=0);
-    if(!valid)throw Error("記録の形式が正しくありません");
-    const ids=new Set(state.logs.map(l=>l.id));state.logs.push(...data.state.logs.filter(l=>!ids.has(l.id)));state.logs.sort((a,b)=>b.startedAt-a.startedAt);
-    for(const [id,notes] of Object.entries(data.state.learning||{}))if(Array.isArray(notes)&&notes.every(n=>typeof n==="string"))state.learning[id]=[...new Set([...(state.learning[id]||[]),...notes])].slice(-12);
-    persist();renderLogs();renderSummary();$("manager").close();notify("記録を復元しました。既存の記録と統合しました。");
-  }catch(err){$("addStatus").textContent="復元できません："+err.message}e.target.value="";
-};
-window.addEventListener("pagehide",stopUnified);
-document.addEventListener("visibilitychange",()=>{if(document.hidden)stopUnified();else tick()});
+$("startStop").onclick=toggleTraining;
+$("micToggle").onclick=()=>{if(listening){stopMic();saveMemo();if(session().logId)writeLog()}else startMic()};
+$("editMemo").onclick=()=>{stopMic();saveMemo();setEditing($("memo").readOnly);if(!$("memo").readOnly)$("memo").focus();else if(session().logId)writeLog()};
+$("memo").oninput=()=>{saveMemo();if(session().logId)writeLog()};
+$("prev").onclick=()=>move(index-1);$("next").onclick=()=>move(index+1);
+$("menuSelect").onchange=e=>move(menus.findIndex(m=>m.id===e.target.value));
+$("video").onerror=()=>{$("videoStatus").textContent="動画を読み込めません。再読み込みしてください。"};
+window.addEventListener("pagehide",stopTraining);
+document.addEventListener("visibilitychange",()=>{if(document.hidden)stopTraining();else tick()});
 async function init(){
   const response=await fetch("./menus.json");if(!response.ok)throw Error("メニューを取得できませんでした");
   menus=(await response.json()).menus;
   try{const saved=JSON.parse(localStorage.getItem(KEY));if(saved&&Array.isArray(saved.logs)&&saved.sessions&&saved.learning)state=saved}catch{notify("端末保存データを読み込めませんでした。")}
   for(const s of Object.values(state.sessions))if(s.runningSince!==null)toggle(s);
   persist();
-  try{await initDB();menus.push(...await request("menus","readonly",s=>s.getAll()))}catch{notify("追加教材の端末保存は利用できません。")}
-  index=Math.max(0,menus.findIndex(m=>m.id===state.selectedId));fillSelect();renderLogs();await render();
-  $("date").textContent=new Date().toLocaleDateString("ja-JP",{year:"numeric",month:"long",day:"numeric",weekday:"short"});
-  setInterval(tick,250);
+  try{await initDB();menus.push(...await request("menus","readonly",s=>s.getAll()))}catch{notify("追加教材の端末保存を読み込めませんでした。")}
+  index=Math.max(0,menus.findIndex(m=>m.id===state.selectedId));
+  $("menuSelect").replaceChildren(...menus.map(m=>{const o=document.createElement("option");o.value=m.id;o.textContent=m.name;return o}));
+  renderLogs();await render();setInterval(tick,250);
 }
 init().catch(error=>{notify(error.message+"。ページを再読み込みしてください。");$("name").textContent="教材の読み込みに失敗しました"});

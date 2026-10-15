@@ -1,4 +1,5 @@
 import {elapsed,toggle,formatDuration,freshSession,summarize} from "./core.js";
+import {buildDailyReport} from "./daily-report.js";
 const $=id=>document.getElementById(id);
 const icons={
   prev:'<path d="M15 5l-7 7 7 7"/><path d="M4 5v14"/>',
@@ -13,6 +14,7 @@ $("prev").innerHTML=svg(icons.prev);$("next").innerHTML=svg(icons.next);
 const KEY="rbody-records-v1",SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
 let db,menus=[],index=0,state={logs:[],sessions:{},learning:{},selectedId:null};
 let recognition=null,listening=false,recognitionGeneration=0,mediaUrls=[],renderId=0;
+let sendingReport=false;
 const current=()=>menus[index];
 const session=()=>state.sessions[current().id]??(state.sessions[current().id]=freshSession(current().id));
 function notify(message){$("notice").textContent=message}
@@ -133,6 +135,25 @@ $("memo").oninput=()=>{saveMemo();if(session().logId)writeLog()};
 $("prev").onclick=()=>move(index-1);$("next").onclick=()=>move(index+1);
 $("menuSelect").onchange=e=>move(menus.findIndex(m=>m.id===e.target.value));
 $("video").onerror=()=>{$("videoStatus").textContent="動画を読み込めません。再読み込みしてください。"};
+async function sendDailyReport(){
+  if(sendingReport||!current())return;
+  stopTraining();
+  const report=buildDailyReport(state.logs);
+  if(!report.count){notify("今日のトレーニング記録がありません。");return}
+  const fingerprint=JSON.stringify({subject:report.subject,body:report.body});
+  if(state.reportReceipts?.[report.dateKey]?.fingerprint===fingerprint){notify("今日の同じ内容のログは送信済みです。");return}
+  sendingReport=true;$("endWorkout").disabled=true;$("endWorkout").textContent="メール送信中…";notify("今日のログを送信しています。");
+  try{
+    const todayLogs=state.logs.filter(log=>buildDailyReport([log]).count>0);
+    const response=await fetch("/api/daily-report",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({logs:todayLogs}),signal:AbortSignal.timeout(30000)});
+    let result;try{result=await response.json()}catch{throw Error("送信結果を確認できませんでした。記録は端末に保存されています。")}
+    if(!response.ok||result.status!=="accepted"||typeof result.messageId!=="string")throw Error(result.error||"メールを送信できませんでした。記録は保存済みです。");
+    state.reportReceipts??={};state.reportReceipts[report.dateKey]={fingerprint,messageId:result.messageId,sentAt:Date.now()};persist();
+    notify(report.to+" 宛てのメール送信を受け付けました。記録："+report.count+"件");
+  }catch(error){notify(error.name==="TimeoutError"?"送信結果を確認できませんでした。記録は保存済みです。同じ内容で再試行できます。":error.message)}
+  finally{sendingReport=false;$("endWorkout").disabled=false;$("endWorkout").textContent="トレーニング終了"}
+}
+$("endWorkout").onclick=sendDailyReport;
 window.addEventListener("pagehide",stopTraining);
 document.addEventListener("visibilitychange",()=>{if(document.hidden)stopTraining();else tick()});
 async function init(){

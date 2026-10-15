@@ -1,0 +1,12 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+const source=fs.readFileSync(new URL("../dist/server/index.js",import.meta.url),"utf8");
+const {default:worker}=await import("data:text/javascript;base64,"+Buffer.from(source).toString("base64"));
+assert.equal(typeof worker.fetch,"function");
+const html=await worker.fetch(new Request("https://training.example/"),{});
+assert.equal(html.status,200);assert.match(await html.text(),/id="endWorkout"/);
+const icon=await worker.fetch(new Request("https://training.example/icons/training-recorder-180.png"),{});
+assert.equal(icon.status,200);assert.equal(icon.headers.get("content-type"),"image/png");
+const api=await worker.fetch(new Request("https://training.example/api/daily-report"),{});
+assert.equal(api.status,405);
+console.log("PASS: standalone Worker, HTML, icon and mail API");

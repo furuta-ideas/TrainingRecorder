@@ -1,8 +1,9 @@
-import {handleDailyMail} from "./mail.js";
+import {handleDailyMail,mailStatus} from "./mail.js";
 // The build embeds HTML/JS/icons and injects a fixed allowlist for media.
 export function createWorker(assets,media){
   return {async fetch(request,env){
     const url=new URL(request.url),pathname=url.pathname;
+    if(pathname==="/api/mail-status"&&request.method==="GET")return mailStatus(request,env);
     if(pathname==="/api/daily-report")return handleDailyMail(request,env);
     if(!["GET","HEAD"].includes(request.method))return new Response("Method not allowed",{status:405});
     const asset=assets[pathname==="/" ? "/index.html" : pathname];

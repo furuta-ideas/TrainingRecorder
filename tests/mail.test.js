@@ -40,3 +40,9 @@ test("送信サービスの拒否と不明な結果を成功として扱わな�
   const uncertain=await handleDailyMail(request(),env,async()=>{throw Error("timeout")},now);
   assert.equal(uncertain.status,502);assert.equal((await uncertain.json()).code,"send_unknown");
 });
+import {mailStatus} from '../server/mail.js';
+test('設定診断はキー自体を返さず、認証済みユーザーに有無だけを返す',async()=>{
+ const unauth=new Request('https://training.example/api/mail-status');assert.equal(mailStatus(unauth,{}).status,401);
+ const req=new Request('https://training.example/api/mail-status',{headers:{'oai-authenticated-user-id':'owner'}});
+ assert.deepEqual(await mailStatus(req,{}).json(),{configured:false});assert.deepEqual(await mailStatus(req,{RESEND_API_KEY:'not-exposed'}).json(),{configured:true});
+});

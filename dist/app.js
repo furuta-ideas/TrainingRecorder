@@ -1,4 +1,5 @@
 import {elapsed,toggle,formatDuration,freshSession,summarize} from "./core.js";
+import {timerSeconds,applyMenuOrder} from "./training.js";
 import {buildDailyReport} from "./daily-report.js";
 const $=id=>document.getElementById(id);
 const icons={
@@ -37,21 +38,28 @@ function writeLog(){
   persist();renderLogs();renderSummary();return true;
 }
 function stopTraining(){
-  stopCountTen();
+  cancelNarration();
   if(!current())return;
   if(session().runningSince!==null)toggle(session());
   writeLog();tick();
 }
+function startTraining(){
+  if(!current()||session().runningSince!==null)return;
+  const s=session();if(!Number.isFinite(s.limitMs))s.limitMs=timerSeconds(current(),state.menuNotes?.[current().id])*1000;
+  if(s.limitMs&&elapsed(s)>=s.limitMs)state.sessions[current().id]=freshSession(current().id);
+  session().limitMs=timerSeconds(current(),state.menuNotes?.[current().id])*1000;
+  toggle(session());persist();readTrainingMemo();tick();
+}
 function toggleTraining(){
   if(!current())return;
-  if(session().runningSince!==null){stopTraining();notify("実施時間とメモをログに自動保存しました。");return}
-  toggle(session());persist();tick();notify("");
+  if(session().runningSince!==null){stopTraining();notify("実施時間を保存しました。");return}
+  startTraining();
 }
-function move(next){
+async function move(next,autoStart=false){
   if(next<0||next>=menus.length||next===index)return;
   stopTraining();state.sessions[current().id]=freshSession(current().id);
   index=next;state.selectedId=current().id;state.sessions[current().id]=freshSession(current().id);
-  persist();render();notify("");
+  persist();await render();notify("");if(autoStart)startTraining();
 }
 function summaryFields(){
   const m=current(),notes=state.learning[m.id]||[],override=state.menuNotes?.[m.id];
@@ -63,23 +71,18 @@ function renderSummary(){
 }
 function openNoteEditor(){
   if(!current()||$("noteDialog").open)return;
-  stopCountTen();const fields=summaryFields();
+  stopTraining();const fields=summaryFields();
   $("noteDialog").dataset.menuId=current().id;$("noteMenuName").textContent=current().name;
-  $("notePrescription").value=fields.prescription;$("noteTip").value=fields.tip;$("noteLearning").value=fields.learning;
+  $("noteTimer").value=timerSeconds(current(),state.menuNotes?.[current().id]);$("notePrescription").value=fields.prescription;$("noteTip").value=fields.tip;$("noteLearning").value=fields.learning;
   $("noteError").textContent="";$("noteDialog").showModal();$("noteTip").focus();
 }
-$("instructions").addEventListener("dblclick",openNoteEditor);
+$("instructions").addEventListener("click",openNoteEditor);
 $("instructions").addEventListener("keydown",event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();openNoteEditor()}});
-let lastNoteTap=0;
-$("instructions").addEventListener("pointerup",event=>{
-  if(event.pointerType!=="touch")return;const now=performance.now();
-  if(lastNoteTap&&now-lastNoteTap<400){lastNoteTap=0;openNoteEditor()}else lastNoteTap=now;
-});
 $("noteForm").addEventListener("submit",event=>{
   event.preventDefault();const id=$("noteDialog").dataset.menuId;
   if(!$("notePrescription").value.trim()){$("noteError").textContent="回数・時間を入力してください。";return}
   const previous=state.menuNotes?.[id];state.menuNotes??={};
-  state.menuNotes[id]={prescription:$("notePrescription").value.trim(),tip:$("noteTip").value.trim(),learning:$("noteLearning").value.trim()};
+  state.menuNotes[id]={timerSeconds:Number($("noteTimer").value),prescription:$("notePrescription").value.trim(),tip:$("noteTip").value.trim(),learning:$("noteLearning").value.trim()};
   if(!persist()){if(previous)state.menuNotes[id]=previous;else delete state.menuNotes[id];$("noteError").textContent="保存できませんでした。入力内容をコピーしてから、端末の保存領域をご確認ください。";return}
   renderSummary();$("noteDialog").close();notify("このメニューのメモを保存しました。");
 });
@@ -97,7 +100,7 @@ async function render(){
   $("video").pause();$("video").removeAttribute("src");$("video").load();
   mediaUrls.forEach(URL.revokeObjectURL);mediaUrls=[];
   $("name").textContent=m.name;$("position").textContent=(index+1)+" / "+menus.length;
-  $("prev").disabled=index===0;$("next").disabled=index===menus.length-1;$("menuSelect").value=m.id;
+  $("prev").disabled=index===0;$("next").disabled=index===menus.length-1;$("menuSelect").textContent=m.name;
   renderSummary();tick();
   $("photos").replaceChildren();$("photos").classList.remove("split");$("mediaEmpty").hidden=true;
   $("video").hidden=true;$("photos").hidden=true;
@@ -143,45 +146,74 @@ function renderLogs(){
     el.append(time,title,comment,duration);$("logs").append(el);
   }
 }
+let voiceOn=false,speechGeneration=0,memoReading=false,lastSpokenSecond=null,advancing=false;
+function cancelNarration(){speechGeneration++;memoReading=false;lastSpokenSecond=null;window.speechSynthesis?.cancel()}
+function speak(text,onend){
+  if(!voiceOn||!window.speechSynthesis||!window.SpeechSynthesisUtterance)return false;
+  const generation=speechGeneration,utterance=new SpeechSynthesisUtterance(text);utterance.lang="ja-JP";utterance.rate=1.15;
+  const voice=window.speechSynthesis.getVoices().find(v=>v.lang.startsWith("ja"));if(voice)utterance.voice=voice;
+  utterance.onend=()=>{if(generation===speechGeneration)onend?.()};
+  utterance.onerror=e=>{if(generation!==speechGeneration)return;memoReading=false;if(!["canceled","interrupted"].includes(e.error))notify("音声を再生できません。音量をご確認ください。時間計測は継続します。")};
+  window.speechSynthesis.speak(utterance);return true;
+}
+function readTrainingMemo(){
+  cancelNarration();if(!voiceOn)return;
+  const fields=summaryFields();memoReading=true;
+  const s=session(),seconds=s.limitMs/1000;
+  if(!speak([fields.prescription,fields.tip,fields.learning,seconds?"設定時間は"+seconds+"秒です。":"時間指定なしです。"].join("。"),()=>{memoReading=false;readRemaining()})){
+    memoReading=false;notify("音声読み上げに対応していません。画面で時間を確認できます。");
+  }
+}
+function readRemaining(){
+  if(!current()||!voiceOn||memoReading||session().runningSince===null||!session().limitMs||window.speechSynthesis?.speaking||window.speechSynthesis?.pending)return;
+  const seconds=Math.max(0,Math.ceil((session().limitMs-elapsed(session()))/1000));
+  if(seconds>0&&seconds!==lastSpokenSecond){lastSpokenSecond=seconds;speak("残り"+seconds+"秒")}
+}
 function tick(){
   $("wallClock").textContent=new Date().toLocaleTimeString("ja-JP",{hour12:false,hour:"2-digit",minute:"2-digit",second:"2-digit"});
-  if(!current())return;const running=session().runningSince!==null;
-  $("startStop").classList.toggle("running",running);$("startStop").textContent=running?"終了":"開始";$("startStop").setAttribute("aria-pressed",String(running));
-  $("elapsed").textContent=formatDuration(elapsed(session()));
+  if(!current())return;const s=session(),running=s.runningSince!==null,ms=elapsed(s),limit=s.limitMs??timerSeconds(current(),state.menuNotes?.[current().id])*1000;
+  $("startStop").classList.toggle("running",running);$("startStop").textContent=running?"一時停止":"トレーニング開始";$("startStop").setAttribute("aria-pressed",String(running));
+  $("elapsed").textContent=formatDuration(ms);$("remaining").textContent=limit?formatDuration(Math.max(0,Math.ceil((limit-ms)/1000))*1000):"手動";
+  if(running&&limit&&ms>=limit&&!advancing){
+    advancing=true;cancelNarration();s.accumulated=limit;s.runningSince=null;writeLog();
+    if(index<menus.length-1){move(index+1,true).finally(()=>{advancing=false})}
+    else{advancing=false;tick();notify("全メニューが完了しました。右上のトレーニング終了から結果を送信できます。")}
+    return;
+  }
+  if(running)readRemaining();
 }
-let countTenInterval=null,countTenStarted=0,countTenValue=0;
-const countWords=["いち","に","さん","よん","ご","ろく","なな","はち","きゅう","じゅう"];
-function stopCountTen(completed=false){
-  clearInterval(countTenInterval);countTenInterval=null;
-  if(!completed)window.speechSynthesis?.cancel();
-  $("countTen").setAttribute("aria-pressed","false");
-  $("countTenLabel").textContent=completed?"10秒完了・もう一度":"音声ON・10秒開始";
-  $("countTen").setAttribute("aria-label",completed?"10秒完了。音声ONでもう一度開始":"音声ON・10秒カウント開始");
-}
-function startCountTen(){
-  if(countTenInterval!==null){stopCountTen();return}
-  const synth=window.speechSynthesis,canSpeak=!!(synth&&window.SpeechSynthesisUtterance);
-  if(canSpeak){synth.cancel();synth.resume();const warmup=new SpeechSynthesisUtterance(" ");warmup.volume=0;synth.speak(warmup)}
-  notify(canSpeak?"1秒ごとに1〜10を読み上げます。":"音声読み上げに対応していません。画面で10秒を数えます。");
-  countTenStarted=performance.now();countTenValue=0;
-  $("countTen").setAttribute("aria-pressed","true");$("countTen").setAttribute("aria-label","10秒カウントを停止");$("countTenLabel").textContent="停止 0 / 10";
-  countTenInterval=setInterval(()=>{
-    const value=Math.min(10,Math.floor((performance.now()-countTenStarted)/1000));
-    if(value<=countTenValue)return;
-    countTenValue=value;$("countTenLabel").textContent="停止 "+value+" / 10";
-    if(canSpeak){
-      synth.cancel();const utterance=new SpeechSynthesisUtterance(countWords[value-1]);utterance.lang="ja-JP";utterance.rate=1.3;
-      const voice=synth.getVoices().find(v=>v.lang.startsWith("ja"));if(voice)utterance.voice=voice;
-      utterance.onerror=event=>{if(!["interrupted","canceled"].includes(event.error))notify("音声を再生できません。端末の音量を確認してください。画面のカウントは継続します。")};
-      synth.speak(utterance);
-    }
-    if(value===10){stopCountTen(true);notify("10秒カウントが完了しました。")}
-  },50);
-}
-$("countTen").onclick=startCountTen;
+$("audioToggle").onclick=()=>{
+  voiceOn=!voiceOn;$("audioToggle").textContent=voiceOn?"音声 ON":"音声 OFF";$("audioToggle").setAttribute("aria-checked",String(voiceOn));
+  if(voiceOn){window.speechSynthesis?.resume();if(current()&&session().runningSince!==null)readTrainingMemo()}else cancelNarration();
+};
 $("startStop").onclick=toggleTraining;
 $("prev").onclick=()=>move(index-1);$("next").onclick=()=>move(index+1);
-$("menuSelect").onchange=e=>move(menus.findIndex(m=>m.id===e.target.value));
+let longPressTimer=null,longPressed=false,draftOrder=[],editingOrder=false,dragIndex=null;
+function fillMenuRows(){
+  $("menuRows").replaceChildren();$("menuTitle").textContent=editingOrder?"トレーニングの順番を変更":"トレーニングリスト";
+  $("menuHint").textContent=editingOrder?"上下ボタンで移動します。パソコンはドラッグでも移動できます。":"種目を選んで移動します。リストボタンを長押しすると並べ替えできます。";
+  $("saveOrder").hidden=!editingOrder;$("editOrder").hidden=editingOrder;
+  draftOrder.forEach((id,i)=>{
+    const m=menus.find(m=>m.id===id),row=document.createElement("div"),choose=document.createElement("button");row.className="menu-row";row.classList.toggle("selected",id===current().id);
+    choose.type="button";choose.textContent=(i+1)+". "+m.name;choose.onclick=()=>{if(!editingOrder){$("menuDialog").close();move(menus.findIndex(m=>m.id===id))}};row.append(choose);
+    for(const [label,delta] of [["上へ",-1],["下へ",1]]){const button=document.createElement("button");button.type="button";button.textContent=delta<0?"↑":"↓";button.setAttribute("aria-label",m.name+"を"+label);button.hidden=!editingOrder;button.disabled=i+delta<0||i+delta>=draftOrder.length;button.onclick=()=>{[draftOrder[i],draftOrder[i+delta]]=[draftOrder[i+delta],draftOrder[i]];fillMenuRows();$("menuRows").children[i+delta].querySelector("button").focus()};row.append(button)}
+    row.draggable=editingOrder;row.ondragstart=e=>{dragIndex=i;e.dataTransfer.setData("text/plain",String(i))};row.ondragover=e=>{if(editingOrder)e.preventDefault()};row.ondrop=e=>{e.preventDefault();if(editingOrder&&dragIndex!==null){const [id]=draftOrder.splice(dragIndex,1);draftOrder.splice(i,0,id);dragIndex=null;fillMenuRows()}};
+    $("menuRows").append(row);
+  });
+}
+function openMenu(reorder=false){
+  if(!current()||$("menuDialog").open)return;
+  stopTraining();draftOrder=menus.map(m=>m.id);editingOrder=reorder;$("orderError").textContent="";fillMenuRows();$("menuDialog").showModal();
+}
+$("menuSelect").onpointerdown=event=>{longPressed=false;const x=event.clientX,y=event.clientY;$("menuSelect").setPointerCapture?.(event.pointerId);longPressTimer=setTimeout(()=>{longPressed=true;openMenu(true)},600);$("menuSelect").onpointermove=e=>{if(Math.abs(e.clientX-x)+Math.abs(e.clientY-y)>15)clearTimeout(longPressTimer)}};
+for(const event of ["pointerup","pointercancel","lostpointercapture"])$("menuSelect").addEventListener(event,()=>clearTimeout(longPressTimer));
+$("menuSelect").onclick=()=>{if(longPressed){longPressed=false;return}openMenu()};$("menuSelect").oncontextmenu=e=>{e.preventDefault();clearTimeout(longPressTimer);longPressed=true;openMenu(true)};
+$("editOrder").onclick=()=>{editingOrder=true;fillMenuRows()};
+$("saveOrder").onclick=()=>{
+  const previous=state.menuOrder;state.menuOrder=[...draftOrder];if(!persist()){state.menuOrder=previous;$("orderError").textContent="保存できませんでした。もう一度お試しください。";return}
+  const id=current().id;menus=applyMenuOrder(menus,state.menuOrder);index=menus.findIndex(m=>m.id===id);$("menuDialog").close();render();notify("メニューの順番を保存しました。");
+};
+$("cancelOrder").onclick=()=>$("menuDialog").close();
 $("video").onerror=()=>{$("videoStatus").textContent="動画を読み込めません。再読み込みしてください。"};
 async function sendDailyReport(){
   if(sendingReport||!current())return {ok:false};
@@ -207,17 +239,20 @@ function closeWorkout(message){
   document.body.classList.add("workout-closed");$("closedScreen").hidden=false;
   try{window.close()}catch{}
 }
-$("endWorkout").onclick=()=>{
+$("endWorkout").onclick=async()=>{
   stopTraining();const report=buildDailyReport(state.logs);
-  $("endMessage").textContent="今日の記録："+report.count+"件。記録はこの端末に保存しました。";
+  $("finishClose").hidden=true;$("skipAndClose").hidden=false;$("endMessage").textContent="今日の記録："+report.count+"件。記録はこの端末に保存しました。";
   $("sendAndClose").disabled=false;$("skipAndClose").disabled=false;$("cancelEnd").disabled=false;$("endDialog").showModal();
+  try{const r=await fetch("/api/mail-status");const status=await r.json();if(status.configured===false&&$("endDialog").open&&!sendingReport)$("endMessage").textContent+=" メール送信は未設定です。Resend APIキーの登録が必要です。"}catch{}
 };
 $("sendAndClose").onclick=async()=>{
   $("sendAndClose").disabled=true;$("skipAndClose").disabled=true;$("cancelEnd").disabled=true;$("endMessage").textContent="メールを送信しています…";
   const result=await sendDailyReport();
-  if(result.ok)closeWorkout(result.message);
+  if(result.ok){$("endMessage").textContent=result.message;$("finishClose").hidden=false;$("finishClose").disabled=false;$("cancelEnd").disabled=false;$("skipAndClose").hidden=true;}
   else{$("endMessage").textContent=(result.error||"送信できませんでした。")+" 記録は保存済みです。再試行するか、送信せず終了できます。";$("sendAndClose").disabled=false;$("skipAndClose").disabled=false;$("cancelEnd").disabled=false;}
 };
+$("finishClose").onclick=()=>closeWorkout($("endMessage").textContent);
+$("retryClose").onclick=()=>{try{window.close()}catch{}};
 $("skipAndClose").onclick=()=>closeWorkout("メールは送信していません。トレーニング記録はこの端末に保存されています。");
 $("cancelEnd").onclick=()=>$("endDialog").close();
 $("endDialog").addEventListener("cancel",event=>{if(sendingReport)event.preventDefault()});
@@ -232,7 +267,7 @@ async function init(){
   persist();
   try{await initDB();menus.push(...await request("menus","readonly",s=>s.getAll()))}catch{notify("追加教材の端末保存を読み込めませんでした。")}
   index=Math.max(0,menus.findIndex(m=>m.id===state.selectedId));
-  $("menuSelect").replaceChildren(...menus.map(m=>{const o=document.createElement("option");o.value=m.id;o.textContent=m.name;return o}));
+  menus=applyMenuOrder(menus,state.menuOrder||[]);index=Math.max(0,menus.findIndex(m=>m.id===state.selectedId));
   renderLogs();await render();setInterval(tick,250);
 }
 init().catch(error=>{notify(error.message+"。ページを再読み込みしてください。");$("name").textContent="教材の読み込みに失敗しました"});

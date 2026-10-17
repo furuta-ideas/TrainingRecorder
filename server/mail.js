@@ -1,5 +1,9 @@
 import {buildDailyReport} from "../dist/daily-report.js";
 const json=(value,status=200)=>Response.json(value,{status,headers:{"Cache-Control":"no-store"}});
+export function mailStatus(request,env){
+  if(!request.headers.get("oai-authenticated-user-id"))return json({error:"アプリにログインしてください。"},401);
+  return json({configured:!!env.RESEND_API_KEY});
+}
 export async function handleDailyMail(request,env,sendFetch=fetch,now=Date.now()){
   if(request.method!=="POST")return json({error:"POSTで送信してください。"},405);
   const origin=new URL(request.url).origin;
@@ -15,7 +19,7 @@ export async function handleDailyMail(request,env,sendFetch=fetch,now=Date.now()
   if(!valid)return json({error:"ログの形式が正しくありません。"},400);
   const report=buildDailyReport(data.logs,now);
   if(!report.count)return json({error:"今日のトレーニング記録がありません。"},400);
-  if(!env.RESEND_API_KEY)return json({error:"メール送信サービスが未設定です。記録は端末に保存されています。",code:"mail_not_configured"},503);
+  if(!env.RESEND_API_KEY)return json({error:"メール送信サービスが未設定です。管理者によるResend APIキーの登録が必要です。記録は端末に保存されています。",code:"mail_not_configured"},503);
   const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(JSON.stringify({userId,subject:report.subject,body:report.body})));
   const key="rbody-"+Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,"0")).join("");
   let response;

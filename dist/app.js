@@ -4,18 +4,14 @@ const $=id=>document.getElementById(id);
 const icons={
   prev:'<path d="M15 5l-7 7 7 7"/><path d="M4 5v14"/>',
   next:'<path d="M9 5l7 7-7 7"/><path d="M20 5v14"/>',
-  mic:'<rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0014 0v-2M12 19v3M8 22h8"/>',
-  off:'<path d="M3 3l18 18M9 9v3a3 3 0 005 2M9 5a3 3 0 016 0v5M5 10v2a7 7 0 0012 5M19 10v2M12 19v3M8 22h8"/>',
-  edit:'<path d="M15 4l5 5M4 20l5-1L21 7a2 2 0 00-5-5L4 14z"/>',
-  check:'<path d="M5 12l4 4L20 5"/>'
 };
 const svg=paths=>'<svg viewBox="0 0 24 24" aria-hidden="true">'+paths+'</svg>';
 $("prev").innerHTML=svg(icons.prev);$("next").innerHTML=svg(icons.next);
-const KEY="rbody-records-v1",SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+const KEY="rbody-records-v1";
 function fitViewport(){document.documentElement.style.setProperty("--app-height",Math.floor(window.visualViewport?.height||window.innerHeight)+"px")}
 fitViewport();window.addEventListener("resize",fitViewport);window.visualViewport?.addEventListener("resize",fitViewport);
 let db,menus=[],index=0,state={logs:[],sessions:{},learning:{},selectedId:null};
-let recognition=null,listening=false,recognitionGeneration=0,mediaUrls=[],renderId=0;
+let mediaUrls=[],renderId=0;
 let sendingReport=false;
 const photoResize=new ResizeObserver(entries=>{
   for(const entry of entries){
@@ -28,12 +24,6 @@ const current=()=>menus[index];
 const session=()=>state.sessions[current().id]??(state.sessions[current().id]=freshSession(current().id));
 function notify(message){$("notice").textContent=message}
 function persist(){try{localStorage.setItem(KEY,JSON.stringify(state));return true}catch{notify("端末への保存ができません。ブラウザの保存領域をご確認ください。");return false}}
-function saveMemo(){if(!current())return;session().memo=$("memo").value;persist()}
-function stopMic(){
-  listening=false;recognitionGeneration++;const previous=recognition;recognition=null;
-  if(previous){previous.onresult=null;previous.onerror=null;previous.onend=null;try{previous.abort()}catch{}}
-  if(current())tick();
-}
 function writeLog(){
   if(!current())return false;const s=session(),memo=s.memo.trim();
   if(s.startedAt===null&&!memo)return false;
@@ -50,12 +40,12 @@ function stopTraining(){
   stopCountTen();
   if(!current())return;
   if(session().runningSince!==null)toggle(session());
-  stopMic();saveMemo();writeLog();tick();
+  writeLog();tick();
 }
 function toggleTraining(){
   if(!current())return;
   if(session().runningSince!==null){stopTraining();notify("実施時間とメモをログに自動保存しました。");return}
-  saveMemo();toggle(session());persist();tick();notify("");
+  toggle(session());persist();tick();notify("");
 }
 function move(next){
   if(next<0||next>=menus.length||next===index)return;
@@ -63,13 +53,38 @@ function move(next){
   index=next;state.selectedId=current().id;state.sessions[current().id]=freshSession(current().id);
   persist();render();notify("");
 }
-function renderSummary(){
-  const m=current();$("prescription").textContent=m.prescription+" ｜ "+m.durationNote;
-  $("tip").textContent=m.tips;$("tip").title=m.tips;
-  const notes=state.learning[m.id]||[];
-  $("learning").textContent=notes.length?"気づき："+summarize(notes.join("。"),46):m.trainerNote||(m.needsConfirmation?"当日の個別説明は未確認":"呼吸とフォームを意識して、丁寧に。");
-  $("learning").title=notes.slice(-3).join("\n");
+function summaryFields(){
+  const m=current(),notes=state.learning[m.id]||[],override=state.menuNotes?.[m.id];
+  return override||{prescription:m.prescription+" ｜ "+m.durationNote,tip:m.tips,learning:notes.length?"気づき："+summarize(notes.join("。"),46):m.trainerNote||(m.needsConfirmation?"当日の個別説明は未確認":"呼吸とフォームを意識して、丁寧に。")};
 }
+function renderSummary(){
+  const fields=summaryFields();
+  for(const [id,key] of [["prescription","prescription"],["tip","tip"],["learning","learning"]]){$(id).textContent=fields[key];$(id).title=fields[key]}
+}
+function openNoteEditor(){
+  if(!current()||$("noteDialog").open)return;
+  stopCountTen();const fields=summaryFields();
+  $("noteDialog").dataset.menuId=current().id;$("noteMenuName").textContent=current().name;
+  $("notePrescription").value=fields.prescription;$("noteTip").value=fields.tip;$("noteLearning").value=fields.learning;
+  $("noteError").textContent="";$("noteDialog").showModal();$("noteTip").focus();
+}
+$("instructions").addEventListener("dblclick",openNoteEditor);
+$("instructions").addEventListener("keydown",event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();openNoteEditor()}});
+let lastNoteTap=0;
+$("instructions").addEventListener("pointerup",event=>{
+  if(event.pointerType!=="touch")return;const now=performance.now();
+  if(lastNoteTap&&now-lastNoteTap<400){lastNoteTap=0;openNoteEditor()}else lastNoteTap=now;
+});
+$("noteForm").addEventListener("submit",event=>{
+  event.preventDefault();const id=$("noteDialog").dataset.menuId;
+  if(!$("notePrescription").value.trim()){$("noteError").textContent="回数・時間を入力してください。";return}
+  const previous=state.menuNotes?.[id];state.menuNotes??={};
+  state.menuNotes[id]={prescription:$("notePrescription").value.trim(),tip:$("noteTip").value.trim(),learning:$("noteLearning").value.trim()};
+  if(!persist()){if(previous)state.menuNotes[id]=previous;else delete state.menuNotes[id];$("noteError").textContent="保存できませんでした。入力内容をコピーしてから、端末の保存領域をご確認ください。";return}
+  renderSummary();$("noteDialog").close();notify("このメニューのメモを保存しました。");
+});
+$("cancelNote").onclick=()=>$("noteDialog").close();
+
 function request(store,mode,fn){return new Promise((resolve,reject)=>{const tx=db.transaction(store,mode),req=fn(tx.objectStore(store));let result;req.onsuccess=()=>{result=req.result};tx.oncomplete=()=>resolve(result);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error)})}
 async function initDB(){db=await new Promise((resolve,reject)=>{const r=indexedDB.open("rbody-media-v1",1);r.onupgradeneeded=()=>{r.result.createObjectStore("assets");r.result.createObjectStore("menus",{keyPath:"id"})};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
 async function assetURL(asset){
@@ -77,14 +92,13 @@ async function assetURL(asset){
   if(asset.blobId){const blob=await request("assets","readonly",s=>s.get(asset.blobId));if(!blob)return null;const url=URL.createObjectURL(blob);mediaUrls.push(url);return url}
   return asset.src;
 }
-function setEditing(editing){$("memo").readOnly=!editing;$("editMemo").innerHTML=svg(editing?icons.check:icons.edit);$("editMemo").setAttribute("aria-label",editing?"手入力を完了":"手入力する");$("editMemo").setAttribute("aria-pressed",String(editing))}
 async function render(){
   const generation=++renderId,m=current();
   $("video").pause();$("video").removeAttribute("src");$("video").load();
   mediaUrls.forEach(URL.revokeObjectURL);mediaUrls=[];
   $("name").textContent=m.name;$("position").textContent=(index+1)+" / "+menus.length;
   $("prev").disabled=index===0;$("next").disabled=index===menus.length-1;$("menuSelect").value=m.id;
-  $("memo").value=session().memo;setEditing(false);renderSummary();tick();
+  renderSummary();tick();
   $("photos").replaceChildren();$("photos").classList.remove("split");$("mediaEmpty").hidden=true;
   $("video").hidden=true;$("photos").hidden=true;
   $("mediaStage").className="media-stage "+(m.video?"has-video":"has-photos");
@@ -134,23 +148,6 @@ function tick(){
   if(!current())return;const running=session().runningSince!==null;
   $("startStop").classList.toggle("running",running);$("startStop").textContent=running?"終了":"開始";$("startStop").setAttribute("aria-pressed",String(running));
   $("elapsed").textContent=formatDuration(elapsed(session()));
-  $("micToggle").innerHTML=svg(listening?icons.off:icons.mic);$("micToggle").classList.toggle("recording",listening);
-  $("micToggle").setAttribute("aria-label",listening?"音声メモを停止":"音声メモを開始");$("micToggle").setAttribute("aria-pressed",String(listening));
-  $("micStatus").textContent=listening?"● 音声入力中":"マイクOFF";$("memo").classList.toggle("recording",listening);
-}
-function startMic(){
-  stopCountTen();
-  if(!SpeechRecognition){notify("音声入力に対応していません。鉛筆アイコンから手入力できます。");return}
-  saveMemo();setEditing(false);
-  const r=new SpeechRecognition();recognition=r;r.lang="ja-JP";r.continuous=true;r.interimResults=true;
-  const generation=++recognitionGeneration,menuId=current().id;
-  const active=()=>listening&&recognition===r&&recognitionGeneration===generation&&current()?.id===menuId;
-  let base=$("memo").value+($("memo").value?"\n":""),finalText="";
-  r.onstart=()=>{if(!active()){try{r.abort()}catch{}}};
-  r.onresult=e=>{if(!active())return;let interim="";for(let i=e.resultIndex;i<e.results.length;i++){if(e.results[i].isFinal)finalText+=e.results[i][0].transcript+"。";else interim+=e.results[i][0].transcript}$("memo").value=base+finalText+interim;saveMemo();if(session().logId)writeLog()};
-  r.onerror=e=>{if(!active()||e.error==="no-speech")return;stopMic();saveMemo();notify(e.error==="not-allowed"?"マイクの許可をご確認ください。時間計測は開始／終了ボタンで操作できます。":"音声入力を停止しました。鉛筆アイコンから手入力できます。")};
-  r.onend=()=>{if(active()){base=$("memo").value+"\n";finalText="";try{r.start()}catch{stopMic();notify("音声入力を停止しました。マイクアイコンで再開できます。")}}};
-  try{listening=true;r.start();tick();notify("")}catch{stopMic();notify("音声入力を開始できませんでした。マイク設定をご確認ください。")}
 }
 let countTenInterval=null,countTenStarted=0,countTenValue=0;
 const countWords=["いち","に","さん","よん","ご","ろく","なな","はち","きゅう","じゅう"];
@@ -163,10 +160,9 @@ function stopCountTen(completed=false){
 }
 function startCountTen(){
   if(countTenInterval!==null){stopCountTen();return}
-  stopMic();saveMemo();
   const synth=window.speechSynthesis,canSpeak=!!(synth&&window.SpeechSynthesisUtterance);
   if(canSpeak){synth.cancel();synth.resume();const warmup=new SpeechSynthesisUtterance(" ");warmup.volume=0;synth.speak(warmup)}
-  notify(canSpeak?"1秒ごとに1〜10を読み上げます。マイクはOFFになります。":"音声読み上げに対応していません。画面で10秒を数えます。");
+  notify(canSpeak?"1秒ごとに1〜10を読み上げます。":"音声読み上げに対応していません。画面で10秒を数えます。");
   countTenStarted=performance.now();countTenValue=0;
   $("countTen").setAttribute("aria-pressed","true");$("countTen").setAttribute("aria-label","10秒カウントを停止");$("countTenLabel").textContent="停止 0 / 10";
   countTenInterval=setInterval(()=>{
@@ -184,9 +180,6 @@ function startCountTen(){
 }
 $("countTen").onclick=startCountTen;
 $("startStop").onclick=toggleTraining;
-$("micToggle").onclick=()=>{if(listening){stopMic();saveMemo();if(session().logId)writeLog()}else startMic()};
-$("editMemo").onclick=()=>{stopMic();saveMemo();setEditing($("memo").readOnly);if(!$("memo").readOnly)$("memo").focus();else if(session().logId)writeLog()};
-$("memo").oninput=()=>{saveMemo();if(session().logId)writeLog()};
 $("prev").onclick=()=>move(index-1);$("next").onclick=()=>move(index+1);
 $("menuSelect").onchange=e=>move(menus.findIndex(m=>m.id===e.target.value));
 $("video").onerror=()=>{$("videoStatus").textContent="動画を読み込めません。再読み込みしてください。"};

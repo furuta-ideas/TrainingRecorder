@@ -4,7 +4,7 @@ const browser=await chromium.launch({channel:'msedge',headless:true});
 try{
  const page=await browser.newPage({viewport:{width:1024,height:768}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.addInitScript(()=>{window.spoken=[];window.closeAttempts=0;window.close=()=>window.closeAttempts++;window.speechBusy=false;Object.defineProperty(window,'speechSynthesis',{value:{get speaking(){return window.speechBusy},pending:false,cancel(){window.speechBusy=false},resume(){},getVoices(){return []},speak(u){window.spoken.push(u.text);window.utterance=u;window.speechBusy=true}}});window.SpeechSynthesisUtterance=class{constructor(text){this.text=text}}});
- await page.goto('http://127.0.0.1:8781');await page.locator('#name').filter({hasText:'リラックス呼吸'}).waitFor();
+ await page.goto('http://127.0.0.1:8781');assert.equal(await page.locator('#openingScreen').isVisible(),true);assert.match(await page.locator('#openingScreen').innerText(),/R-body/);assert.match(await page.locator('#appUpdated').innerText(),/2026年10月18日/);assert.equal(await page.locator('.appbar').isVisible(),false);await page.screenshot({path:'qa-opening.png',fullPage:true});await page.waitForTimeout(2100);assert.equal(await page.locator('#openingScreen').isVisible(),true);await page.locator('#openingScreen').waitFor({state:'hidden'});assert.ok(await page.evaluate(()=>window.rbodyOpeningFinished-window.rbodyOpeningStarted>=2950));await page.locator('#name').filter({hasText:'リラックス呼吸'}).waitFor();
  assert.equal(await page.locator('#memo,#micToggle,#editMemo,#countTen').count(),0);assert.equal(await page.locator('#audioToggle').getAttribute('aria-checked'),'false');
  const initial=await page.locator('#tip').innerText();await page.locator('#instructions').click();assert.equal(await page.locator('#noteTip').inputValue(),initial);
  await page.locator('#noteTip').fill('保存しない');await page.locator('#cancelNote').click();assert.equal(await page.locator('#tip').innerText(),initial);
@@ -34,5 +34,14 @@ try{
   for(const id of ['endWorkout','audioToggle','clock','instructions','mediaStage']){const r=await page.locator('#'+id).boundingBox();assert.ok(r.y>=0&&r.y+r.height<=viewport.height,id+' outside '+JSON.stringify(viewport))}
  }
  await page.setViewportSize({width:390,height:844});await page.screenshot({path:'qa-training-iphone.png',fullPage:true});await page.setViewportSize({width:1024,height:768});await page.screenshot({path:'qa-training-photo.png',fullPage:true});
+ const flow=await browser.newPage({viewport:{width:390,height:844}});const data=await (await page.request.get('http://127.0.0.1:8781/menus.json')).json();const three=data.menus.slice(0,3),order=[three[1].id,three[0].id,three[2].id];
+ await flow.route('**/menus.json',route=>route.fulfill({json:{menus:three}}));
+ await flow.addInitScript(({three,order})=>{localStorage.setItem('rbody-records-v1',JSON.stringify({logs:[],sessions:{},learning:{},menuOrder:order,menuNotes:Object.fromEntries(three.map(m=>[m.id,{prescription:m.prescription,tip:m.tips,learning:'連続進行確認',timerSeconds:1}]))}))},{three,order});
+ await flow.goto('http://127.0.0.1:8781');await flow.locator('#openingScreen').waitFor({state:'hidden'});assert.equal(await flow.locator('#name').innerText(),three[1].name);
+ await flow.evaluate(()=>{window.buttonChanges=[];new MutationObserver(()=>{window.buttonChanges.push({name:document.querySelector('#name').textContent,running:document.querySelector('#startStop').getAttribute('aria-pressed')})}).observe(document.querySelector('#startStop'),{attributes:true,attributeFilter:['aria-pressed']})});
+ await flow.locator('#startStop').click();await flow.waitForFunction(()=>document.querySelector('#notice').textContent.includes('全メニューが完了'),{},{timeout:6000});
+ assert.equal(await flow.locator('.log-entry').count(),3);assert.equal(await flow.locator('#startStop').getAttribute('aria-pressed'),'false');
+ const logs=await flow.evaluate(()=>JSON.parse(localStorage.getItem('rbody-records-v1')).logs);assert.deepEqual(logs.map(l=>l.menuId).reverse(),order);assert.ok(logs.every(l=>l.duration===1000));
+ assert.ok(await flow.evaluate(last=>window.buttonChanges.filter(c=>c.running==='false').every(c=>c.name===last),three[2].name));await flow.close();
  assert.deepEqual(errors,[]);console.log('PASS: single-click notes, one-row controls, long-press reorder persistence, voice OFF default, memo/remaining speech, pause/resume, timed auto-next/final stop, explicit mail setup failure and send-then-close, responsive iPhone/iPad');
 }finally{await browser.close()}

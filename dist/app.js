@@ -57,9 +57,11 @@ function toggleTraining(){
 }
 async function move(next,autoStart=false){
   if(next<0||next>=menus.length||next===index)return;
-  stopTraining();state.sessions[current().id]=freshSession(current().id);
+  if(autoStart)cancelNarration();else stopTraining();
+  state.sessions[current().id]=freshSession(current().id);
   index=next;state.selectedId=current().id;state.sessions[current().id]=freshSession(current().id);
-  persist();await render();notify("");if(autoStart)startTraining();
+  persist();if(autoStart&&!document.hidden)startTraining();
+  const rendering=render();notify("");await rendering;
 }
 function summaryFields(){
   const m=current(),notes=state.learning[m.id]||[],override=state.menuNotes?.[m.id];

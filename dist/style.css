@@ -14,3 +14,7 @@ body.opening>.appbar,body.opening>main,body.opening>footer{visibility:hidden}
 @keyframes opening-progress{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 @media(prefers-reduced-motion:reduce){.opening-progress span{animation:none}}
 @media(max-height:450px){#openingScreen{padding:12px}.opening-character{width:100px;height:100px;margin-bottom:0}.opening-eyebrow{margin:4px 0 6px;font-size:8px}#openingScreen h2{font-size:25px}.opening-tagline{margin:10px 0}.opening-progress{margin-top:10px}}
+
+/* Clear, heavy Gothic lettering matching the supplied visual reference. */
+#name,#openingScreen h2{font-family:"Noto Sans JP","Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;font-weight:900;-webkit-text-stroke:0;text-shadow:none;letter-spacing:.015em}
+.instructions{font-family:"Noto Sans JP","Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;font-weight:700}

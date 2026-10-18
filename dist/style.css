@@ -18,3 +18,8 @@ body.opening>.appbar,body.opening>main,body.opening>footer{visibility:hidden}
 /* Clear, heavy Gothic lettering matching the supplied visual reference. */
 #name,#openingScreen h2{font-family:"Noto Sans JP","Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;font-weight:900;-webkit-text-stroke:0;text-shadow:none;letter-spacing:.015em}
 .instructions{font-family:"Noto Sans JP","Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;font-weight:700}
+
+#name{cursor:pointer;touch-action:manipulation;border-radius:5px}#name::after{content:" ▾";font-size:.65em;color:#577e95}#name:hover{color:#004478}#name:focus-visible{outline:3px solid #19a5bf;outline-offset:2px}
+.control-panel{grid-template-columns:52px 52px minmax(110px,1fr) minmax(140px,220px)}
+.menu-row{grid-template-columns:minmax(0,1fr) 48px}.menu-row.sorting{background:#e1f3ed;box-shadow:0 3px 12px #214f4826;outline:2px solid #258d66;border-radius:7px;position:relative;z-index:1}.sort-handle{width:48px;min-height:48px;display:grid;place-items:center;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;color:#58717b;background:#eef5f6}.sort-handle[aria-pressed=true]{cursor:grabbing;color:white;background:#258d66}.sort-handle svg{width:24px;height:24px;fill:currentColor}#menuRows{max-height:min(52dvh,440px);overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;padding:3px}#orderStatus{font-size:12px;min-height:1.2em;color:#287450}
+@media(max-width:650px){.control-panel{grid-template-columns:44px 44px minmax(65px,1fr) minmax(118px,1.4fr)}.start-stop{font-size:14px}.elapsed{font-size:10px}.elapsed strong{font-size:20px}.elapsed small{font-size:11px}}

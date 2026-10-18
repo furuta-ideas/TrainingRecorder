@@ -102,7 +102,7 @@ async function render(){
   $("video").pause();$("video").removeAttribute("src");$("video").load();
   mediaUrls.forEach(URL.revokeObjectURL);mediaUrls=[];
   $("name").textContent=m.name;$("position").textContent=(index+1)+" / "+menus.length;
-  $("prev").disabled=index===0;$("next").disabled=index===menus.length-1;$("menuSelect").textContent=m.name;
+  $("prev").disabled=index===0;$("next").disabled=index===menus.length-1;$("name").setAttribute("aria-label",m.name+"。トレーニングを選択・並べ替え");
   renderSummary();tick();
   $("photos").replaceChildren();$("photos").classList.remove("split");$("mediaEmpty").hidden=true;
   $("video").hidden=true;$("photos").hidden=true;
@@ -190,30 +190,64 @@ $("audioToggle").onclick=()=>{
 };
 $("startStop").onclick=toggleTraining;
 $("prev").onclick=()=>move(index-1);$("next").onclick=()=>move(index+1);
-let longPressTimer=null,longPressed=false,draftOrder=[],editingOrder=false,dragIndex=null;
+let draftOrder=[],editingOrder=false,handleDrag=null,dragFrame=null,keyboardGrab=null;
+const handleIcon='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="5" r="1.5"/><circle cx="16" cy="5" r="1.5"/><circle cx="8" cy="12" r="1.5"/><circle cx="16" cy="12" r="1.5"/><circle cx="8" cy="19" r="1.5"/><circle cx="16" cy="19" r="1.5"/></svg>';
+function markOrderChanged(){editingOrder=true;$("saveOrder").hidden=false;$("cancelOrder").textContent="キャンセル";$("orderError").textContent=""}
+function syncRowOrder(){
+  draftOrder=[...$("menuRows").children].map(row=>row.dataset.id);
+  [...$("menuRows").children].forEach((row,i)=>{row.querySelector(".menu-choice").textContent=(i+1)+". "+menus.find(m=>m.id===row.dataset.id).name});
+}
+function moveRowTo(row,targetIndex){
+  const rows=[...$("menuRows").children],from=rows.indexOf(row),to=Math.max(0,Math.min(rows.length-1,targetIndex));if(from===to)return;
+  if(to>from)rows[to].after(row);else rows[to].before(row);
+  if(handleDrag?.row===row){try{handleDrag.handle.setPointerCapture(handleDrag.pointerId)}catch{}}else if(keyboardGrab?.id===row.dataset.id)row.querySelector(".sort-handle").focus();
+  syncRowOrder();markOrderChanged();$("orderStatus").textContent=menus.find(m=>m.id===row.dataset.id).name+"を"+(to+1)+"番目へ移動しました。";
+}
+function dragAt(y){
+  if(!handleDrag)return;const list=$("menuRows"),bounds=list.getBoundingClientRect(),rows=[...list.children],row=handleDrag.row;
+  const target=rows.find(r=>{const b=r.getBoundingClientRect();return y>=b.top&&y<=b.bottom});
+  if(target&&target!==row){const from=rows.indexOf(row),to=rows.indexOf(target),b=target.getBoundingClientRect();if((to>from&&y>b.top+b.height/2)||(to<from&&y<b.top+b.height/2))moveRowTo(row,to)}
+  handleDrag.y=y;
+}
+function scrollDrag(){
+  if(!handleDrag)return;const list=$("menuRows"),b=list.getBoundingClientRect(),y=handleDrag.y;
+  if(y<b.top+32)list.scrollTop-=7;else if(y>b.bottom-32)list.scrollTop+=7;
+  dragAt(Math.max(b.top+2,Math.min(b.bottom-2,y)));handleDrag.y=y;dragFrame=requestAnimationFrame(scrollDrag);
+}
+function finishHandleDrag(cancel=false){
+  if(!handleDrag)return;const drag=handleDrag;handleDrag=null;cancelAnimationFrame(dragFrame);dragFrame=null;
+  drag.row.classList.remove("sorting");drag.handle.setAttribute("aria-pressed","false");
+  try{drag.handle.releasePointerCapture(drag.pointerId)}catch{}
+  if(cancel){draftOrder=drag.before;editingOrder=drag.wasEditing;fillMenuRows();$("orderStatus").textContent="移動を取り消しました。"}
+}
 function fillMenuRows(){
-  $("menuRows").replaceChildren();$("menuTitle").textContent=editingOrder?"トレーニングの順番を変更":"トレーニングリスト";
-  $("menuHint").textContent=editingOrder?"上下ボタンで移動します。パソコンはドラッグでも移動できます。":"種目を選んで移動します。リストボタンを長押しすると並べ替えできます。";
-  $("saveOrder").hidden=!editingOrder;$("editOrder").hidden=editingOrder;
+  $("menuRows").replaceChildren();$("menuTitle").textContent="トレーニングを選択・並べ替え";
+  $("menuHint").textContent="種目名で移動。右のハンドルをつかんで順番を変更し、保存してください。キーボードはハンドルでSpace、矢印で移動、Enterで確定。";
+  $("saveOrder").hidden=!editingOrder;$("cancelOrder").textContent=editingOrder?"キャンセル":"閉じる";
   draftOrder.forEach((id,i)=>{
-    const m=menus.find(m=>m.id===id),row=document.createElement("div"),choose=document.createElement("button");row.className="menu-row";row.classList.toggle("selected",id===current().id);
-    choose.type="button";choose.textContent=(i+1)+". "+m.name;choose.onclick=()=>{if(!editingOrder){$("menuDialog").close();move(menus.findIndex(m=>m.id===id))}};row.append(choose);
-    for(const [label,delta] of [["上へ",-1],["下へ",1]]){const button=document.createElement("button");button.type="button";button.textContent=delta<0?"↑":"↓";button.setAttribute("aria-label",m.name+"を"+label);button.hidden=!editingOrder;button.disabled=i+delta<0||i+delta>=draftOrder.length;button.onclick=()=>{[draftOrder[i],draftOrder[i+delta]]=[draftOrder[i+delta],draftOrder[i]];fillMenuRows();$("menuRows").children[i+delta].querySelector("button").focus()};row.append(button)}
-    row.draggable=editingOrder;row.ondragstart=e=>{dragIndex=i;e.dataTransfer.setData("text/plain",String(i))};row.ondragover=e=>{if(editingOrder)e.preventDefault()};row.ondrop=e=>{e.preventDefault();if(editingOrder&&dragIndex!==null){const [id]=draftOrder.splice(dragIndex,1);draftOrder.splice(i,0,id);dragIndex=null;fillMenuRows()}};
-    $("menuRows").append(row);
+    const m=menus.find(m=>m.id===id),row=document.createElement("div"),choose=document.createElement("button"),handle=document.createElement("button");row.className="menu-row";row.dataset.id=id;row.classList.toggle("selected",id===current().id);
+    choose.type="button";choose.className="menu-choice";choose.textContent=(i+1)+". "+m.name;choose.onclick=()=>{if(editingOrder){$("orderError").textContent="順番を保存するか、キャンセルしてから種目を選んでください。";return}$("menuDialog").close();move(menus.findIndex(m=>m.id===id))};
+    handle.type="button";handle.className="sort-handle";handle.innerHTML=handleIcon;handle.setAttribute("aria-label",m.name+"の並べ替えハンドル");handle.setAttribute("aria-pressed","false");handle.title="つかんで上下に移動";
+    handle.onpointerdown=e=>{if(e.button!==0||handleDrag)return;e.preventDefault();keyboardGrab=null;handleDrag={handle,row,pointerId:e.pointerId,y:e.clientY,before:[...draftOrder],wasEditing:editingOrder};row.classList.add("sorting");handle.setAttribute("aria-pressed","true");handle.focus();try{handle.setPointerCapture(e.pointerId)}catch{};scrollDrag()};
+    handle.onpointermove=e=>{if(handleDrag?.pointerId===e.pointerId)dragAt(e.clientY)};
+    handle.onpointerup=e=>{if(handleDrag?.pointerId===e.pointerId)finishHandleDrag()};handle.onpointercancel=()=>finishHandleDrag(true);handle.onlostpointercapture=()=>finishHandleDrag(true);
+    handle.onkeydown=e=>{
+      if(e.key==="Escape"){if(handleDrag){e.preventDefault();e.stopPropagation();finishHandleDrag(true)}else if(keyboardGrab?.id===id){e.preventDefault();e.stopPropagation();draftOrder=keyboardGrab.before;editingOrder=keyboardGrab.wasEditing;keyboardGrab=null;fillMenuRows();$("orderStatus").textContent="移動を取り消しました。"}return}
+      if(e.key===" "||e.key==="Enter"){e.preventDefault();if(keyboardGrab?.id===id){keyboardGrab=null;handle.setAttribute("aria-pressed","false")}else{keyboardGrab={id,before:[...draftOrder],wasEditing:editingOrder};handle.setAttribute("aria-pressed","true")}return}
+      if(keyboardGrab?.id===id&&["ArrowUp","ArrowDown"].includes(e.key)){e.preventDefault();moveRowTo(row,[...$("menuRows").children].indexOf(row)+(e.key==="ArrowUp"?-1:1));row.scrollIntoView({block:"nearest"})}
+    };
+    row.append(choose,handle);$("menuRows").append(row);
   });
 }
-function openMenu(reorder=false){
+function openMenu(){
   if(!current()||$("menuDialog").open)return;
-  stopTraining();draftOrder=menus.map(m=>m.id);editingOrder=reorder;$("orderError").textContent="";fillMenuRows();$("menuDialog").showModal();
+  stopTraining();draftOrder=menus.map(m=>m.id);editingOrder=false;keyboardGrab=null;$("orderError").textContent="";$("orderStatus").textContent="";fillMenuRows();$("menuDialog").showModal();
 }
-$("menuSelect").onpointerdown=event=>{longPressed=false;const x=event.clientX,y=event.clientY;$("menuSelect").setPointerCapture?.(event.pointerId);longPressTimer=setTimeout(()=>{longPressed=true;openMenu(true)},600);$("menuSelect").onpointermove=e=>{if(Math.abs(e.clientX-x)+Math.abs(e.clientY-y)>15)clearTimeout(longPressTimer)}};
-for(const event of ["pointerup","pointercancel","lostpointercapture"])$("menuSelect").addEventListener(event,()=>clearTimeout(longPressTimer));
-$("menuSelect").onclick=()=>{if(longPressed){longPressed=false;return}openMenu()};$("menuSelect").oncontextmenu=e=>{e.preventDefault();clearTimeout(longPressTimer);longPressed=true;openMenu(true)};
-$("editOrder").onclick=()=>{editingOrder=true;fillMenuRows()};
+$("name").onclick=openMenu;$("name").onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openMenu()}};
+$("menuDialog").addEventListener("cancel",()=>finishHandleDrag(true));$("menuDialog").addEventListener("close",()=>{finishHandleDrag();keyboardGrab=null});
 $("saveOrder").onclick=()=>{
-  const previous=state.menuOrder;state.menuOrder=[...draftOrder];if(!persist()){state.menuOrder=previous;$("orderError").textContent="保存できませんでした。もう一度お試しください。";return}
-  const id=current().id;menus=applyMenuOrder(menus,state.menuOrder);index=menus.findIndex(m=>m.id===id);$("menuDialog").close();render();notify("メニューの順番を保存しました。");
+  const id=current().id,previous=state.menuOrder,previousSelected=state.selectedId;state.menuOrder=[...draftOrder];state.selectedId=id;if(!persist()){state.menuOrder=previous;state.selectedId=previousSelected;$("orderError").textContent="保存できませんでした。もう一度お試しください。";return}
+  menus=applyMenuOrder(menus,state.menuOrder);index=menus.findIndex(m=>m.id===id);$("menuDialog").close();render();notify("メニューの順番を保存しました。");
 };
 $("cancelOrder").onclick=()=>$("menuDialog").close();
 $("video").onerror=()=>{$("videoStatus").textContent="動画を読み込めません。再読み込みしてください。"};

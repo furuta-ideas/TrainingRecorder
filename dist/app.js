@@ -10,19 +10,12 @@ const icons={
 const svg=paths=>'<svg viewBox="0 0 24 24" aria-hidden="true">'+paths+'</svg>';
 $("prev").innerHTML=svg(icons.prev);$("next").innerHTML=svg(icons.next);
 const KEY="rbody-records-v1";
+const DEFAULT_SETTINGS_REVISION="2026-10-19-table-v2";
 function fitViewport(){document.documentElement.style.setProperty("--app-height",Math.floor(window.visualViewport?.height||window.innerHeight)+"px")}
 fitViewport();window.addEventListener("resize",fitViewport);window.visualViewport?.addEventListener("resize",fitViewport);
 let db,menus=[],index=0,state={logs:[],sessions:{},learning:{},selectedId:null};
 let mediaUrls=[],renderId=0;
 let sendingReport=false;
-const configByIndex=()=>trainingConfig[Math.max(0,menus.indexOf(current()))]||{};
-function ensureEnhancedEditor(){
-  const form=$("noteForm"); if(!form||$("noteRepetitions"))return;
-  form.innerHTML='<h2 id="noteTitle">トレーニング設定を編集</h2><p id="noteMenuName"></p><label>トレーニング名<input id="noteName" required maxlength="120"></label><label>回数<input id="noteRepetitions" type="number" min="1" max="999" required></label><label>1回あたりの時間（秒）<input id="notePerRepSeconds" type="number" min="1" max="3600" required></label><label>セット数<input id="noteSets" type="number" min="1" max="99" required></label><label>トレーニングのポイント<textarea id="noteTip" rows="3" maxlength="3000"></textarea></label><label>補足・気づき<textarea id="noteLearning" rows="3" maxlength="3000"></textarea></label><p id="noteError" role="alert"></p><div class="dialog-actions"><button id="saveNote" type="submit">保存</button><button id="cancelNote" type="button">キャンセル</button></div>';
-  $("cancelNote").onclick=()=>$('noteDialog').close();
-for(const id of ["noteRepetitions","notePerRepSeconds","noteSets"])$(id)?.addEventListener("input",updateAutoTimerPreview);
-}
-ensureEnhancedEditor();
 const photoResize=new ResizeObserver(entries=>{
   for(const entry of entries){
     const gallery=entry.target;if(!gallery.classList.contains("split"))continue;
@@ -74,20 +67,19 @@ async function move(next,autoStart=false){
   const rendering=render();notify("");await rendering;
 }
 function summaryFields(){
-  const m=current(),notes=state.learning[m.id]||[],override=state.menuNotes?.[m.id],cfg=configByIndex();
-  return override||{name:cfg.name||m.name,repetitions:cfg.repetitions||1,perRepSeconds:cfg.perRepSeconds||6,sets:cfg.sets||1,prescription:cfg.prescription||m.prescription+" ｜ "+m.durationNote,tip:cfg.tip||m.tips,learning:cfg.supplement||(notes.length?"気づき："+summarize(notes.join("。"),46):m.trainerNote||(m.needsConfirmation?"当日の個別説明は未確認":"呼吸とフォームを意識して、丁寧に。"))};
+  const m=current(),notes=state.learning[m.id]||[],override=state.menuNotes?.[m.id];
+  return {name:m.name,repetitions:m.repetitions||1,perRepSeconds:m.perRepSeconds||6,sets:m.sets||1,prescription:m.supplement?m.prescription:m.prescription+(m.durationNote?" ｜ "+m.durationNote:""),tip:m.tip||m.tips,learning:m.supplement||(notes.length?"気づき："+summarize(notes.join("。"),46):m.trainerNote||(m.needsConfirmation?"当日の個別説明は未確認":"呼吸とフォームを意識して、丁寧に。")),...override};
 }
 function renderSummary(){
   const fields=summaryFields();
   for(const [id,key] of [["prescription","prescription"],["tip","tip"],["learning","learning"]]){$(id).textContent=fields[key];$(id).title=fields[key]}
 }
 function autoTimerForFields(){const r=Number($("noteRepetitions")?.value)||1,p=Number($("notePerRepSeconds")?.value)||1,s=Number($("noteSets")?.value)||1;return r*p*s+(s-1)*30}
-function updateAutoTimerPreview(){}
 function openNoteEditor(){
   if(!current()||$("noteDialog").open)return;
   stopTraining();const fields=summaryFields();
   $("noteDialog").dataset.menuId=current().id;$("noteMenuName").textContent=current().name;
-  $("noteName").value=fields.name||current().name;$("noteRepetitions").value=fields.repetitions||1;$("notePerRepSeconds").value=fields.perRepSeconds||6;$("noteSets").value=fields.sets||1;$("noteTip").value=fields.tip;$("noteLearning").value=fields.learning;updateAutoTimerPreview();
+  $("noteName").value=fields.name||current().name;$("noteRepetitions").value=fields.repetitions||1;$("notePerRepSeconds").value=fields.perRepSeconds||6;$("noteSets").value=fields.sets||1;$("noteTip").value=fields.tip;$("noteLearning").value=fields.learning;
   $("noteError").textContent="";$("noteDialog").showModal();$("noteTip").focus();
 }
 $("instructions").addEventListener("click",openNoteEditor);
@@ -97,9 +89,9 @@ $("noteForm").addEventListener("submit",event=>{
   if(!$("noteName").value.trim()){$("noteError").textContent="トレーニング名を入力してください。";return}
   const previous=state.menuNotes?.[id];state.menuNotes??={};
   state.menuNotes[id]={name:$("noteName").value.trim(),repetitions:Number($("noteRepetitions").value),perRepSeconds:Number($("notePerRepSeconds").value),sets:Number($("noteSets").value),timerSeconds:autoTimerForFields(),prescription:`${Number($("noteSets").value)>1?$("noteSets").value+"セット × ":""}${$("noteRepetitions").value}回`,tip:$("noteTip").value.trim(),learning:$("noteLearning").value.trim()};
-  const menu=menus.find(m=>m.id===id);if(menu)menu.name=state.menuNotes[id].name;
-  if(!persist()){if(previous)state.menuNotes[id]=previous;else delete state.menuNotes[id];$("noteError").textContent="保存できませんでした。入力内容をコピーしてから、端末の保存領域をご確認ください。";return}
-  renderSummary();$("noteDialog").close();notify("このメニューのメモを保存しました。");
+  const menu=menus.find(m=>m.id===id),previousName=menu?.name;if(menu)menu.name=state.menuNotes[id].name;
+  if(!persist()){if(previous)state.menuNotes[id]=previous;else delete state.menuNotes[id];if(menu)menu.name=previousName;$("noteError").textContent="保存できませんでした。入力内容をコピーしてから、端末の保存領域をご確認ください。";return}
+  $("name").textContent=state.menuNotes[id].name;$("name").setAttribute("aria-label",state.menuNotes[id].name+"。トレーニングを選択・並べ替え");renderSummary();$("noteDialog").close();notify("このメニューのメモを保存しました。");
 });
 $("cancelNote").onclick=()=>$("noteDialog").close();
 
@@ -311,13 +303,26 @@ $("endDialog").addEventListener("cancel",event=>{if(sendingReport)event.preventD
 $("returnApp").onclick=()=>{document.body.classList.remove("workout-closed");$("closedScreen").hidden=true};
 window.addEventListener("pagehide",stopTraining);
 document.addEventListener("visibilitychange",()=>{if(document.hidden)stopTraining();else tick()});
+function upgradeDefaultSettings(){
+  if(state.defaultSettingsRevision===DEFAULT_SETTINGS_REVISION)return;
+  const builtInIds=new Set(menus.slice(0,trainingConfig.length).map(menu=>menu.id));
+  for(const [id,previous] of Object.entries(state.menuNotes||{})){
+    if(!builtInIds.has(id))continue;
+    state.previousTrainingSettings??={};
+    state.previousTrainingSettings[id]??=previous;
+    delete state.menuNotes[id];
+  }
+  state.defaultSettingsRevision=DEFAULT_SETTINGS_REVISION;
+}
 async function init(){
   const response=await fetch("./menus.json");if(!response.ok)throw Error("メニューを取得できませんでした");
   menus=(await response.json()).menus;const defaultTimers=[60,60,60,200,120,120,60,60,60,60,60,60,60,120,120];menus.forEach((m,i)=>Object.assign(m,trainingConfig[i]||{},{timerSeconds:defaultTimers[i]||60}));
   try{const saved=JSON.parse(localStorage.getItem(KEY));if(saved&&Array.isArray(saved.logs)&&saved.sessions&&saved.learning)state=saved}catch{notify("端末保存データを読み込めませんでした。")}
+  upgradeDefaultSettings();
   for(const s of Object.values(state.sessions))if(s.runningSince!==null)toggle(s);
   persist();
   try{await initDB();menus.push(...await request("menus","readonly",s=>s.getAll()))}catch{notify("追加教材の端末保存を読み込めませんでした。")}
+  for(const menu of menus)if(state.menuNotes?.[menu.id]?.name)menu.name=state.menuNotes[menu.id].name;
   index=Math.max(0,menus.findIndex(m=>m.id===state.selectedId));
   menus=applyMenuOrder(menus,state.menuOrder||[]);index=Math.max(0,menus.findIndex(m=>m.id===state.selectedId));
   renderLogs();await render();setInterval(tick,250);

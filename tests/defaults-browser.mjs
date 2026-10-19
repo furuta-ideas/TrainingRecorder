@@ -1,0 +1,58 @@
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+import {trainingConfig} from '../dist/training-config.js';
+const require=createRequire(import.meta.url);
+const {chromium}=require('C:/Users/kashi/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+const browser=await chromium.launch({channel:'msedge',headless:true});
+try{
+  const page=await browser.newPage({viewport:{width:390,height:844}});
+  const errors=[];page.on('pageerror',error=>errors.push(error.message));
+  await page.route('https://fonts.googleapis.com/**',route=>route.fulfill({contentType:'text/css',body:''}));
+  const response=await page.request.get('http://127.0.0.1:8781/menus.json');
+  const {menus}=await response.json();
+  const first=menus[0].id,second=menus[1].id;
+  const legacy={name:'リラックス呼吸',prescription:'4セット × 1回',tip:'正座で手を前につき、背中を丸める。5秒吸う→5秒吐く→5秒止める×4回。',learning:'呼吸とフォームを意識して、丁寧に。',timerSeconds:120};
+  await page.addInitScript(({first,second,legacy})=>{if(!localStorage.getItem('rbody-records-v1'))localStorage.setItem('rbody-records-v1',JSON.stringify({logs:[{id:'saved-log',menuId:first,name:'リラックス呼吸',startedAt:Date.now(),duration:1000,memo:''}],sessions:{},learning:{},selectedId:first,menuOrder:[second,first],menuNotes:{[first]:legacy}}))},{first,second,legacy});
+  await page.goto('http://127.0.0.1:8781');
+  await page.locator('#openingScreen').waitFor({state:'hidden'});
+  assert.equal(await page.locator('#name').innerText(),trainingConfig[0].name);
+  assert.equal(await page.locator('#position').innerText(),'2 / 15');
+  assert.equal(await page.locator('#prescription').innerText(),trainingConfig[0].prescription);
+  assert.equal(await page.locator('#tip').innerText(),trainingConfig[0].tip);
+  assert.equal(await page.locator('#learning').innerText(),trainingConfig[0].supplement);
+  const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('rbody-records-v1')));
+  assert.equal(saved.defaultSettingsRevision,'2026-10-19-table-v2');
+  assert.deepEqual(saved.previousTrainingSettings[first],legacy);
+  assert.equal(saved.menuNotes[first],undefined);
+  assert.equal(saved.logs[0].id,'saved-log');
+  assert.deepEqual(saved.menuOrder,[second,first]);
+  await page.locator('#instructions').click();
+  assert.equal(await page.locator('#noteTip').inputValue(),trainingConfig[0].tip);
+  assert.equal(await page.locator('#noteLearning').inputValue(),trainingConfig[0].supplement);
+  assert.equal(await page.locator('#noteForm').getByText('自動タイマー：',{exact:false}).count(),0);
+  await page.locator('#cancelNote').click();
+  await page.locator('#prev').click();
+  assert.equal(await page.locator('#tip').innerText(),trainingConfig[1].tip);
+  assert.equal(await page.locator('#learning').innerText(),trainingConfig[1].supplement);
+  for(let i=0;i<trainingConfig.length;i++){
+    await page.locator('#name').click();
+    await page.locator(`.menu-row[data-id="${menus[i].id}"] .menu-choice`).click();
+    assert.equal(await page.locator('#name').innerText(),trainingConfig[i].name);
+    assert.equal(await page.locator('#prescription').innerText(),trainingConfig[i].prescription);
+    assert.equal(await page.locator('#tip').innerText(),trainingConfig[i].tip);
+    assert.equal(await page.locator('#learning').innerText(),trainingConfig[i].supplement);
+  }
+  await page.locator('#name').click();
+  await page.locator(`.menu-row[data-id="${first}"] .menu-choice`).click();
+  await page.locator('#instructions').click();
+  await page.locator('#noteName').fill('自分のリラックス呼吸');
+  await page.locator('#noteTip').fill('自分で編集したポイント');
+  await page.locator('#saveNote').click();
+  await page.reload();await page.locator('#openingScreen').waitFor({state:'hidden'});
+  assert.equal(await page.locator('#name').innerText(),'自分のリラックス呼吸');
+  assert.equal(await page.locator('#tip').innerText(),'自分で編集したポイント');
+  await page.locator('#name').click();
+  assert.match(await page.locator(`.menu-row[data-id="${first}"] .menu-choice`).innerText(),/自分のリラックス呼吸/);
+  assert.deepEqual(errors,[]);
+  console.log('PASS: legacy settings migrate to supplied defaults, logs/order survive, reordered menus keep their own guidance, new edits persist');
+}finally{await browser.close()}

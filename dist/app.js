@@ -1,5 +1,6 @@
 import {elapsed,toggle,formatDuration,freshSession,summarize} from "./core.js";
 import {timerSeconds,applyMenuOrder} from "./training.js";
+import {trainingConfig} from "./training-config.js";
 import {buildDailyReport} from "./daily-report.js";
 const $=id=>document.getElementById(id);
 const icons={
@@ -14,6 +15,14 @@ fitViewport();window.addEventListener("resize",fitViewport);window.visualViewpor
 let db,menus=[],index=0,state={logs:[],sessions:{},learning:{},selectedId:null};
 let mediaUrls=[],renderId=0;
 let sendingReport=false;
+const configByIndex=()=>trainingConfig[Math.max(0,menus.indexOf(current()))]||{};
+function ensureEnhancedEditor(){
+  const form=$("noteForm"); if(!form||$("noteRepetitions"))return;
+  form.innerHTML='<h2 id="noteTitle">トレーニング設定を編集</h2><p id="noteMenuName"></p><p class="note-help">名称・回数・1回時間・セット数・ポイント・補足を設定します。自動タイマーは回数×1回時間×セット数＋セット間30秒です。</p><label>トレーニング名<input id="noteName" required maxlength="120"></label><label>回数<input id="noteRepetitions" type="number" min="1" max="999" required></label><label>1回あたりの時間（秒）<input id="notePerRepSeconds" type="number" min="1" max="3600" required></label><label>セット数<input id="noteSets" type="number" min="1" max="99" required></label><label>トレーニングのポイント<textarea id="noteTip" rows="3" maxlength="3000"></textarea></label><label>補足・気づき<textarea id="noteLearning" rows="3" maxlength="3000"></textarea></label><p id="noteAutoTimer" class="note-help"></p><p id="noteError" role="alert"></p><div class="dialog-actions"><button id="saveNote" type="submit">保存</button><button id="cancelNote" type="button">キャンセル</button></div>';
+  $("cancelNote").onclick=()=>$('noteDialog').close();
+for(const id of ["noteRepetitions","notePerRepSeconds","noteSets"])$(id)?.addEventListener("input",updateAutoTimerPreview);
+}
+ensureEnhancedEditor();
 const photoResize=new ResizeObserver(entries=>{
   for(const entry of entries){
     const gallery=entry.target;if(!gallery.classList.contains("split"))continue;
@@ -47,9 +56,10 @@ function startTraining(){
   if(!current()||session().runningSince!==null)return;
   const s=session();if(!Number.isFinite(s.limitMs))s.limitMs=timerSeconds(current(),state.menuNotes?.[current().id])*1000;
   if(s.limitMs&&elapsed(s)>=s.limitMs)state.sessions[current().id]=freshSession(current().id);
-  session().limitMs=timerSeconds(current(),state.menuNotes?.[current().id])*1000;
+  session().limitMs=timerSeconds(current(),state.menuNotes?.[current().id])*1000+3000;session().prepUntil=Date.now()+3000;session().lastRep=0;
   toggle(session());persist();readTrainingMemo();tick();
 }
+function beep(){try{const C=window.AudioContext||window.webkitAudioContext;if(!C)return;const c=new C(),o=c.createOscillator(),g=c.createGain();o.frequency.value=880;g.gain.value=.08;o.connect(g).connect(c.destination);o.start();o.stop(c.currentTime+.09)}catch{}}
 function toggleTraining(){
   if(!current())return;
   if(session().runningSince!==null){stopTraining();notify("実施時間を保存しました。");return}
@@ -64,27 +74,30 @@ async function move(next,autoStart=false){
   const rendering=render();notify("");await rendering;
 }
 function summaryFields(){
-  const m=current(),notes=state.learning[m.id]||[],override=state.menuNotes?.[m.id];
-  return override||{prescription:m.prescription+" ｜ "+m.durationNote,tip:m.tips,learning:notes.length?"気づき："+summarize(notes.join("。"),46):m.trainerNote||(m.needsConfirmation?"当日の個別説明は未確認":"呼吸とフォームを意識して、丁寧に。")};
+  const m=current(),notes=state.learning[m.id]||[],override=state.menuNotes?.[m.id],cfg=configByIndex();
+  return override||{name:cfg.name||m.name,repetitions:cfg.repetitions||1,perRepSeconds:cfg.perRepSeconds||6,sets:cfg.sets||1,prescription:cfg.prescription||m.prescription+" ｜ "+m.durationNote,tip:cfg.tip||m.tips,learning:cfg.supplement||(notes.length?"気づき："+summarize(notes.join("。"),46):m.trainerNote||(m.needsConfirmation?"当日の個別説明は未確認":"呼吸とフォームを意識して、丁寧に。"))};
 }
 function renderSummary(){
   const fields=summaryFields();
   for(const [id,key] of [["prescription","prescription"],["tip","tip"],["learning","learning"]]){$(id).textContent=fields[key];$(id).title=fields[key]}
 }
+function autoTimerForFields(){const r=Number($("noteRepetitions")?.value)||1,p=Number($("notePerRepSeconds")?.value)||1,s=Number($("noteSets")?.value)||1;return r*p*s+(s-1)*30}
+function updateAutoTimerPreview(){const el=$("noteAutoTimer");if(el)el.textContent=`自動タイマー：${autoTimerForFields()}秒（準備3秒、セット間休憩30秒）`}
 function openNoteEditor(){
   if(!current()||$("noteDialog").open)return;
   stopTraining();const fields=summaryFields();
   $("noteDialog").dataset.menuId=current().id;$("noteMenuName").textContent=current().name;
-  $("noteTimer").value=timerSeconds(current(),state.menuNotes?.[current().id]);$("notePrescription").value=fields.prescription;$("noteTip").value=fields.tip;$("noteLearning").value=fields.learning;
+  $("noteName").value=fields.name||current().name;$("noteRepetitions").value=fields.repetitions||1;$("notePerRepSeconds").value=fields.perRepSeconds||6;$("noteSets").value=fields.sets||1;$("noteTip").value=fields.tip;$("noteLearning").value=fields.learning;updateAutoTimerPreview();
   $("noteError").textContent="";$("noteDialog").showModal();$("noteTip").focus();
 }
 $("instructions").addEventListener("click",openNoteEditor);
 $("instructions").addEventListener("keydown",event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();openNoteEditor()}});
 $("noteForm").addEventListener("submit",event=>{
   event.preventDefault();const id=$("noteDialog").dataset.menuId;
-  if(!$("notePrescription").value.trim()){$("noteError").textContent="回数・時間を入力してください。";return}
+  if(!$("noteName").value.trim()){$("noteError").textContent="トレーニング名を入力してください。";return}
   const previous=state.menuNotes?.[id];state.menuNotes??={};
-  state.menuNotes[id]={timerSeconds:Number($("noteTimer").value),prescription:$("notePrescription").value.trim(),tip:$("noteTip").value.trim(),learning:$("noteLearning").value.trim()};
+  state.menuNotes[id]={name:$("noteName").value.trim(),repetitions:Number($("noteRepetitions").value),perRepSeconds:Number($("notePerRepSeconds").value),sets:Number($("noteSets").value),timerSeconds:autoTimerForFields(),prescription:`${Number($("noteSets").value)>1?$("noteSets").value+"セット × ":""}${$("noteRepetitions").value}回`,tip:$("noteTip").value.trim(),learning:$("noteLearning").value.trim()};
+  const menu=menus.find(m=>m.id===id);if(menu)menu.name=state.menuNotes[id].name;
   if(!persist()){if(previous)state.menuNotes[id]=previous;else delete state.menuNotes[id];$("noteError").textContent="保存できませんでした。入力内容をコピーしてから、端末の保存領域をご確認ください。";return}
   renderSummary();$("noteDialog").close();notify("このメニューのメモを保存しました。");
 });
@@ -101,7 +114,7 @@ async function render(){
   const generation=++renderId,m=current();
   $("video").pause();$("video").removeAttribute("src");$("video").load();
   mediaUrls.forEach(URL.revokeObjectURL);mediaUrls=[];
-  $("name").textContent=m.name;$("position").textContent=(index+1)+" / "+menus.length;
+  $("name").textContent=summaryFields().name||m.name;$("position").textContent=(index+1)+" / "+menus.length;
   $("prev").disabled=index===0;$("next").disabled=index===menus.length-1;$("name").setAttribute("aria-label",m.name+"。トレーニングを選択・並べ替え");
   renderSummary();tick();
   $("photos").replaceChildren();$("photos").classList.remove("split");$("mediaEmpty").hidden=true;
@@ -176,6 +189,9 @@ function tick(){
   if(!current())return;const s=session(),running=s.runningSince!==null,ms=elapsed(s),limit=s.limitMs??timerSeconds(current(),state.menuNotes?.[current().id])*1000;
   $("startStop").classList.toggle("running",running);$("startStop").textContent=running?"一時停止":"トレーニング開始";$("startStop").setAttribute("aria-pressed",String(running));
   $("elapsed").textContent=formatDuration(ms);$("remaining").textContent=limit?formatDuration(Math.max(0,Math.ceil((limit-ms)/1000))*1000):"手動";
+  let progress=$("repProgress");if(!progress){progress=document.createElement("b");progress.id="repProgress";document.querySelector(".elapsed")?.append(progress)}
+  const cfg=summaryFields(),active=Math.max(0,ms-3000),cycle=Math.max(1,(cfg.perRepSeconds||1)*1000),rep=Math.min((cfg.repetitions||1),Math.floor(active/cycle)+1),set=Math.min((cfg.sets||1),Math.floor(active/(cycle*(cfg.repetitions||1)+30000))+1);progress.textContent=running?(ms<3000?"準備…":"セット "+set+" / "+(cfg.sets||1)+"・"+rep+"回目 / "+(cfg.repetitions||1)):"";
+  if(running&&ms>=3000&&rep!==s.lastRep){s.lastRep=rep;beep()}
   if(running&&limit&&ms>=limit&&!advancing){
     advancing=true;cancelNarration();s.accumulated=limit;s.runningSince=null;writeLog();
     if(index<menus.length-1){move(index+1,true).finally(()=>{advancing=false})}
@@ -297,7 +313,7 @@ window.addEventListener("pagehide",stopTraining);
 document.addEventListener("visibilitychange",()=>{if(document.hidden)stopTraining();else tick()});
 async function init(){
   const response=await fetch("./menus.json");if(!response.ok)throw Error("メニューを取得できませんでした");
-  menus=(await response.json()).menus;
+  menus=(await response.json()).menus;menus.forEach((m,i)=>Object.assign(m,trainingConfig[i]||{}));
   try{const saved=JSON.parse(localStorage.getItem(KEY));if(saved&&Array.isArray(saved.logs)&&saved.sessions&&saved.learning)state=saved}catch{notify("端末保存データを読み込めませんでした。")}
   for(const s of Object.values(state.sessions))if(s.runningSince!==null)toggle(s);
   persist();

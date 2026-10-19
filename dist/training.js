@@ -1,5 +1,6 @@
 export function timerSeconds(menu,override){
   if(Number.isFinite(override?.timerSeconds))return Math.max(0,Math.min(3600,Math.round(override.timerSeconds)));
+  if(Number.isFinite(menu?.repetitions)&&Number.isFinite(menu?.perRepSeconds)&&Number.isFinite(menu?.sets))return Math.max(1,Math.min(3600,Math.round(menu.repetitions*menu.perRepSeconds*menu.sets+(menu.sets-1)*30)));
   const text=(override?.prescription??menu.prescription+' '+menu.durationNote).normalize('NFKC');
   const matches=[...text.matchAll(/(\d+(?:\.\d+)?)\s*(分|秒)/g)];
   if(!matches.length)return 60;

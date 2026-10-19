@@ -18,7 +18,7 @@ let sendingReport=false;
 const configByIndex=()=>trainingConfig[Math.max(0,menus.indexOf(current()))]||{};
 function ensureEnhancedEditor(){
   const form=$("noteForm"); if(!form||$("noteRepetitions"))return;
-  form.innerHTML='<h2 id="noteTitle">トレーニング設定を編集</h2><p id="noteMenuName"></p><p class="note-help">名称・回数・1回時間・セット数・ポイント・補足を設定します。自動タイマーは回数×1回時間×セット数＋セット間30秒です。</p><label>トレーニング名<input id="noteName" required maxlength="120"></label><label>回数<input id="noteRepetitions" type="number" min="1" max="999" required></label><label>1回あたりの時間（秒）<input id="notePerRepSeconds" type="number" min="1" max="3600" required></label><label>セット数<input id="noteSets" type="number" min="1" max="99" required></label><label>トレーニングのポイント<textarea id="noteTip" rows="3" maxlength="3000"></textarea></label><label>補足・気づき<textarea id="noteLearning" rows="3" maxlength="3000"></textarea></label><p id="noteAutoTimer" class="note-help"></p><p id="noteError" role="alert"></p><div class="dialog-actions"><button id="saveNote" type="submit">保存</button><button id="cancelNote" type="button">キャンセル</button></div>';
+  form.innerHTML='<h2 id="noteTitle">トレーニング設定を編集</h2><p id="noteMenuName"></p><label>トレーニング名<input id="noteName" required maxlength="120"></label><label>回数<input id="noteRepetitions" type="number" min="1" max="999" required></label><label>1回あたりの時間（秒）<input id="notePerRepSeconds" type="number" min="1" max="3600" required></label><label>セット数<input id="noteSets" type="number" min="1" max="99" required></label><label>トレーニングのポイント<textarea id="noteTip" rows="3" maxlength="3000"></textarea></label><label>補足・気づき<textarea id="noteLearning" rows="3" maxlength="3000"></textarea></label><p id="noteError" role="alert"></p><div class="dialog-actions"><button id="saveNote" type="submit">保存</button><button id="cancelNote" type="button">キャンセル</button></div>';
   $("cancelNote").onclick=()=>$('noteDialog').close();
 for(const id of ["noteRepetitions","notePerRepSeconds","noteSets"])$(id)?.addEventListener("input",updateAutoTimerPreview);
 }
@@ -82,7 +82,7 @@ function renderSummary(){
   for(const [id,key] of [["prescription","prescription"],["tip","tip"],["learning","learning"]]){$(id).textContent=fields[key];$(id).title=fields[key]}
 }
 function autoTimerForFields(){const r=Number($("noteRepetitions")?.value)||1,p=Number($("notePerRepSeconds")?.value)||1,s=Number($("noteSets")?.value)||1;return r*p*s+(s-1)*30}
-function updateAutoTimerPreview(){const el=$("noteAutoTimer");if(el)el.textContent=`自動タイマー：${autoTimerForFields()}秒（準備3秒、セット間休憩30秒）`}
+function updateAutoTimerPreview(){}
 function openNoteEditor(){
   if(!current()||$("noteDialog").open)return;
   stopTraining();const fields=summaryFields();
@@ -313,7 +313,7 @@ window.addEventListener("pagehide",stopTraining);
 document.addEventListener("visibilitychange",()=>{if(document.hidden)stopTraining();else tick()});
 async function init(){
   const response=await fetch("./menus.json");if(!response.ok)throw Error("メニューを取得できませんでした");
-  menus=(await response.json()).menus;menus.forEach((m,i)=>Object.assign(m,trainingConfig[i]||{}));
+  menus=(await response.json()).menus;const defaultTimers=[60,60,60,200,120,120,60,60,60,60,60,60,60,120,120];menus.forEach((m,i)=>Object.assign(m,trainingConfig[i]||{},{timerSeconds:defaultTimers[i]||60}));
   try{const saved=JSON.parse(localStorage.getItem(KEY));if(saved&&Array.isArray(saved.logs)&&saved.sessions&&saved.learning)state=saved}catch{notify("端末保存データを読み込めませんでした。")}
   for(const s of Object.values(state.sessions))if(s.runningSince!==null)toggle(s);
   persist();

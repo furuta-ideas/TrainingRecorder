@@ -15,12 +15,9 @@ function visit(dir){
 }
 visit(dist);
 const stripImports=source=>source.replace(/^import .*;\r?\n/gm,"");
-const core=stripImports(fs.readFileSync(path.join(dist,"core.js"),"utf8"));
-const report=stripImports(fs.readFileSync(path.join(dist,"daily-report.js"),"utf8"));
-const mail=stripImports(fs.readFileSync(path.join(root,"server/mail.js"),"utf8"));
 const worker=stripImports(fs.readFileSync(path.join(root,"server/worker.js"),"utf8"));
-const source=[core,report,mail,worker,"export default createWorker("+JSON.stringify(assets)+","+JSON.stringify(media)+");"].join("\n");
+const source=[worker,"export default createWorker("+JSON.stringify(assets)+","+JSON.stringify(media)+");"].join("\n");
 fs.mkdirSync(path.join(dist,"server"),{recursive:true});fs.mkdirSync(path.join(dist,".openai"),{recursive:true});
 fs.writeFileSync(path.join(dist,"server/index.js"),source);
 fs.copyFileSync(path.join(root,".openai/hosting.json"),path.join(dist,".openai/hosting.json"));
-console.log("Built email Worker: "+Object.keys(assets).length+" embedded assets, "+Object.keys(media).length+" media URLs");
+console.log("Built training Worker: "+Object.keys(assets).length+" embedded assets, "+Object.keys(media).length+" media URLs");

@@ -2,18 +2,9 @@ import http from "node:http";
 import {createReadStream,statSync} from "node:fs";
 import {fileURLToPath} from "node:url";
 import path from "node:path";
-import {handleDailyMail,mailStatus} from "./server/mail.js";
 const root=fileURLToPath(new URL("./dist/",import.meta.url));
 const types={".html":"text/html; charset=utf-8",".js":"text/javascript; charset=utf-8",".css":"text/css; charset=utf-8",".json":"application/json; charset=utf-8",".webmanifest":"application/manifest+json; charset=utf-8",".png":"image/png",".mp4":"video/mp4"};
 http.createServer(async(req,res)=>{
-  if(["/api/daily-report","/api/mail-status"].includes(req.url?.split("?")[0])){
-    const body=[];for await(const chunk of req)body.push(chunk);
-    const origin="http://127.0.0.1:8781",headers=new Headers(req.headers);
-    headers.set("oai-authenticated-user-id","local-preview-only");
-    const request=new Request(origin+req.url,{method:req.method,headers,...(req.method==="POST"?{body:Buffer.concat(body)}:{})});
-    const result=req.url.startsWith("/api/mail-status")?mailStatus(request,{}):await handleDailyMail(request,{});
-    res.writeHead(result.status,Object.fromEntries(result.headers));res.end(Buffer.from(await result.arrayBuffer()));return;
-  }
   try{
     const pathname=decodeURIComponent(new URL(req.url,"http://localhost").pathname);
     const filename=path.resolve(root,"."+pathname+(pathname.endsWith("/")?"index.html":""));

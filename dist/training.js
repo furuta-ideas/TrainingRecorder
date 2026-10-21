@@ -1,15 +1,8 @@
-export function timerSeconds(menu,override){
-  if(Number.isFinite(override?.timerSeconds))return Math.max(0,Math.min(3600,Math.round(override.timerSeconds)));
-  if(Number.isFinite(menu?.timerSeconds))return Math.max(0,Math.min(3600,Math.round(menu.timerSeconds)));
-  if(Number.isFinite(menu?.repetitions)&&Number.isFinite(menu?.perRepSeconds)&&Number.isFinite(menu?.sets))return Math.max(1,Math.min(3600,Math.round(menu.repetitions*menu.perRepSeconds*menu.sets+(menu.sets-1)*30)));
-  const text=(override?.prescription??menu.prescription+' '+menu.durationNote).normalize('NFKC');
-  const matches=[...text.matchAll(/(\d+(?:\.\d+)?)\s*(分|秒)/g)];
-  if(!matches.length)return 60;
-  const seconds=matches.reduce((sum,m)=>sum+Number(m[1])*(m[2]==='分'?60:1),0);
-  const sets=text.match(/(\d+)\s*セット/);
-  return Math.max(1,Math.min(3600,Math.round(seconds*(sets?Number(sets[1]):1))));
+export const SLOT_SECONDS=5;
+export const MAX_SLOTS=24;
+export function normalizePlan(config){
+ const active=Math.min(MAX_SLOTS,Math.round(config.durationSeconds/SLOT_SECONDS));
+ return Array.from({length:MAX_SLOTS},(_,i)=>i<active?{...(config.steps[i]||{}),active:true}:{top:'',bottom:'',active:false});
 }
-export function applyMenuOrder(menus,order=[]){
-  const rank=new Map(order.map((id,i)=>[id,i]));
-  return [...menus].sort((a,b)=>(rank.get(a.id)??order.length)-(rank.get(b.id)??order.length));
-}
+export function slotAt(elapsedMs){return Math.max(0,Math.min(MAX_SLOTS-1,Math.floor(elapsedMs/(SLOT_SECONDS*1000))))}
+export function applyMenuOrder(menus,order=[]){const rank=new Map(order.map((id,i)=>[id,i]));return [...menus].sort((a,b)=>(rank.get(a.id)??order.length)-(rank.get(b.id)??order.length))}

@@ -1,330 +1,138 @@
-import {elapsed,toggle,formatDuration,freshSession,summarize} from "./core.js";
-import {timerSeconds,applyMenuOrder} from "./training.js";
-import {trainingConfig} from "./training-config.js";
-import {buildDailyReport} from "./daily-report.js";
-const $=id=>document.getElementById(id);
-const icons={
-  prev:'<path d="M15 5l-7 7 7 7"/><path d="M4 5v14"/>',
-  next:'<path d="M9 5l7 7-7 7"/><path d="M20 5v14"/>',
-};
-const svg=paths=>'<svg viewBox="0 0 24 24" aria-hidden="true">'+paths+'</svg>';
-$("prev").innerHTML=svg(icons.prev);$("next").innerHTML=svg(icons.next);
-const KEY="rbody-records-v1";
-const DEFAULT_SETTINGS_REVISION="2026-10-19-table-v2";
-function fitViewport(){document.documentElement.style.setProperty("--app-height",Math.floor(window.visualViewport?.height||window.innerHeight)+"px")}
-fitViewport();window.addEventListener("resize",fitViewport);window.visualViewport?.addEventListener("resize",fitViewport);
-let db,menus=[],index=0,state={logs:[],sessions:{},learning:{},selectedId:null};
-let mediaUrls=[],renderId=0;
-let sendingReport=false;
-const photoResize=new ResizeObserver(entries=>{
-  for(const entry of entries){
-    const gallery=entry.target;if(!gallery.classList.contains("split"))continue;
-    gallery.style.setProperty("--photo-cols",entry.contentRect.width/Math.max(1,entry.contentRect.height)>=202/148?2:1);
-  }
-});
-photoResize.observe($("photos"));
-const current=()=>menus[index];
-const session=()=>state.sessions[current().id]??(state.sessions[current().id]=freshSession(current().id));
-function notify(message){$("notice").textContent=message}
-function persist(){try{localStorage.setItem(KEY,JSON.stringify(state));return true}catch{notify("端末への保存ができません。ブラウザの保存領域をご確認ください。");return false}}
-function writeLog(){
-  if(!current())return false;const s=session(),memo=s.memo.trim();
-  if(s.startedAt===null&&!memo)return false;
-  s.logId??=crypto.randomUUID();
-  const entry={id:s.logId,menuId:current().id,name:current().name,startedAt:s.startedAt??Date.now(),endedAt:Date.now(),duration:elapsed(s),memo};
-  const existing=state.logs.findIndex(log=>log.id===s.logId);
-  if(existing<0)state.logs.unshift(entry);else state.logs[existing]=entry;
-  if(memo&&memo!==s.learnedMemo){
-    state.learning[current().id]=[...new Set([...(state.learning[current().id]||[]),memo])].slice(-12);s.learnedMemo=memo;
-  }
-  persist();renderLogs();renderSummary();return true;
-}
-function stopTraining(){
-  cancelNarration();
-  if(!current())return;
-  if(session().runningSince!==null)toggle(session());
-  writeLog();tick();
-}
-function startTraining(){
-  if(!current()||session().runningSince!==null)return;
-  const s=session();if(!Number.isFinite(s.limitMs))s.limitMs=timerSeconds(current(),state.menuNotes?.[current().id])*1000;
-  if(s.limitMs&&elapsed(s)>=s.limitMs)state.sessions[current().id]=freshSession(current().id);
-  session().limitMs=timerSeconds(current(),state.menuNotes?.[current().id])*1000+3000;session().prepUntil=Date.now()+3000;session().lastRep=0;
-  toggle(session());persist();readTrainingMemo();tick();
-}
-function beep(){try{const C=window.AudioContext||window.webkitAudioContext;if(!C)return;const c=new C(),o=c.createOscillator(),g=c.createGain();o.frequency.value=880;g.gain.value=.08;o.connect(g).connect(c.destination);o.start();o.stop(c.currentTime+.09)}catch{}}
-function toggleTraining(){
-  if(!current())return;
-  if(session().runningSince!==null){stopTraining();notify("実施時間を保存しました。");return}
-  startTraining();
-}
-async function move(next,autoStart=false){
-  if(next<0||next>=menus.length||next===index)return;
-  if(autoStart)cancelNarration();else stopTraining();
-  state.sessions[current().id]=freshSession(current().id);
-  index=next;state.selectedId=current().id;state.sessions[current().id]=freshSession(current().id);
-  persist();if(autoStart&&!document.hidden)startTraining();
-  const rendering=render();notify("");await rendering;
-}
-function summaryFields(){
-  const m=current(),notes=state.learning[m.id]||[],override=state.menuNotes?.[m.id];
-  return {name:m.name,repetitions:m.repetitions||1,perRepSeconds:m.perRepSeconds||6,sets:m.sets||1,prescription:m.supplement?m.prescription:m.prescription+(m.durationNote?" ｜ "+m.durationNote:""),tip:m.tip||m.tips,learning:m.supplement||(notes.length?"気づき："+summarize(notes.join("。"),46):m.trainerNote||(m.needsConfirmation?"当日の個別説明は未確認":"呼吸とフォームを意識して、丁寧に。")),...override};
-}
-function renderSummary(){
-  const fields=summaryFields();
-  for(const [id,key] of [["prescription","prescription"],["tip","tip"],["learning","learning"]]){$(id).textContent=fields[key];$(id).title=fields[key]}
-}
-function autoTimerForFields(){const r=Number($("noteRepetitions")?.value)||1,p=Number($("notePerRepSeconds")?.value)||1,s=Number($("noteSets")?.value)||1;return r*p*s+(s-1)*30}
-function openNoteEditor(){
-  if(!current()||$("noteDialog").open)return;
-  stopTraining();const fields=summaryFields();
-  $("noteDialog").dataset.menuId=current().id;$("noteMenuName").textContent=current().name;
-  $("noteName").value=fields.name||current().name;$("noteRepetitions").value=fields.repetitions||1;$("notePerRepSeconds").value=fields.perRepSeconds||6;$("noteSets").value=fields.sets||1;$("noteTip").value=fields.tip;$("noteLearning").value=fields.learning;
-  $("noteError").textContent="";$("noteDialog").showModal();$("noteTip").focus();
-}
-$("instructions").addEventListener("click",openNoteEditor);
-$("instructions").addEventListener("keydown",event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();openNoteEditor()}});
-$("noteForm").addEventListener("submit",event=>{
-  event.preventDefault();const id=$("noteDialog").dataset.menuId;
-  if(!$("noteName").value.trim()){$("noteError").textContent="トレーニング名を入力してください。";return}
-  const previous=state.menuNotes?.[id];state.menuNotes??={};
-  state.menuNotes[id]={name:$("noteName").value.trim(),repetitions:Number($("noteRepetitions").value),perRepSeconds:Number($("notePerRepSeconds").value),sets:Number($("noteSets").value),timerSeconds:autoTimerForFields(),prescription:`${Number($("noteSets").value)>1?$("noteSets").value+"セット × ":""}${$("noteRepetitions").value}回`,tip:$("noteTip").value.trim(),learning:$("noteLearning").value.trim()};
-  const menu=menus.find(m=>m.id===id),previousName=menu?.name;if(menu)menu.name=state.menuNotes[id].name;
-  if(!persist()){if(previous)state.menuNotes[id]=previous;else delete state.menuNotes[id];if(menu)menu.name=previousName;$("noteError").textContent="保存できませんでした。入力内容をコピーしてから、端末の保存領域をご確認ください。";return}
-  $("name").textContent=state.menuNotes[id].name;$("name").setAttribute("aria-label",state.menuNotes[id].name+"。トレーニングを選択・並べ替え");renderSummary();$("noteDialog").close();notify("このメニューのメモを保存しました。");
-});
-$("cancelNote").onclick=()=>$("noteDialog").close();
+import {trainingConfig} from './training-config.js';
+import {normalizePlan,slotAt,applyMenuOrder} from './training.js';
 
-function request(store,mode,fn){return new Promise((resolve,reject)=>{const tx=db.transaction(store,mode),req=fn(tx.objectStore(store));let result;req.onsuccess=()=>{result=req.result};tx.oncomplete=()=>resolve(result);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error)})}
-async function initDB(){db=await new Promise((resolve,reject)=>{const r=indexedDB.open("rbody-media-v1",1);r.onupgradeneeded=()=>{r.result.createObjectStore("assets");r.result.createObjectStore("menus",{keyPath:"id"})};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
-async function assetURL(asset){
-  if(!asset)return null;
-  if(asset.blobId){const blob=await request("assets","readonly",s=>s.get(asset.blobId));if(!blob)return null;const url=URL.createObjectURL(blob);mediaUrls.push(url);return url}
-  return asset.src;
+const $=id=>document.getElementById(id);
+const STORAGE_KEY='rbody-semi-auto-v1';
+let menus=[],index=0,running=false,started=false,startedAt=0,raf=0,renderToken=0,mediaUrls=[];
+let state=loadState();
+
+function loadState(){
+ try{
+  const saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}');
+  if(saved&&typeof saved==='object')return {order:Array.isArray(saved.order)?saved.order:[],edits:saved.edits&&typeof saved.edits==='object'?saved.edits:{}};
+ }catch{}
+ try{
+  const legacy=JSON.parse(localStorage.getItem('rbody-records-v1')||'{}'),edits={};
+  for(const [id,note] of Object.entries(legacy.menuNotes||{}))edits[id]={name:note.name,memo:[note.tip,note.learning].filter(Boolean).join('\n')};
+  return {order:Array.isArray(legacy.menuOrder)?legacy.menuOrder:[],edits};
+ }catch{return {order:[],edits:{}}}
 }
-async function render(){
-  const generation=++renderId,m=current();
-  $("video").pause();$("video").removeAttribute("src");$("video").load();
-  mediaUrls.forEach(URL.revokeObjectURL);mediaUrls=[];
-  $("name").textContent=summaryFields().name||m.name;$("position").textContent=(index+1)+" / "+menus.length;
-  $("prev").disabled=index===0;$("next").disabled=index===menus.length-1;$("name").setAttribute("aria-label",m.name+"。トレーニングを選択・並べ替え");
-  renderSummary();tick();
-  $("photos").replaceChildren();$("photos").classList.remove("split");$("mediaEmpty").hidden=true;
-  $("video").hidden=true;$("photos").hidden=true;
-  $("mediaStage").className="media-stage "+(m.video?"has-video":"has-photos");
-  $("mediaLabel").textContent=m.video?"MOVIE":"PHOTO";
-  if(m.video){
-    const src=await assetURL(m.video);if(generation!==renderId)return;
-    if(!src){$("mediaEmpty").hidden=false;return}
-    $("video").src=src;$("video").hidden=false;$("videoStatus").textContent="繰り返し再生";
-    $("video").play().catch(()=>{if(generation===renderId)$("videoStatus").textContent="再生ボタンをタップしてください"});
-  }else{
-    $("photos").hidden=false;$("videoStatus").textContent="";
-    for(const [i,asset] of m.images.entries()){
-      const src=await assetURL(asset);if(generation!==renderId)return;if(!src)continue;
-      if(asset.frames?.length){
-        $("photos").classList.add("split");
-        for(const [frameIndex,frame] of asset.frames.entries()){
-          const figure=document.createElement("figure"),ns="http://www.w3.org/2000/svg",picture=document.createElementNS(ns,"svg"),image=document.createElementNS(ns,"image");
-          picture.setAttribute("viewBox",[frame.x,frame.y,frame.width,frame.height].join(" "));picture.setAttribute("role","img");picture.setAttribute("aria-label",m.name+" 写真 "+(frameIndex+1));
-          const defs=document.createElementNS(ns,"defs"),clip=document.createElementNS(ns,"clipPath"),rect=document.createElementNS(ns,"rect"),clipId="photo-"+generation+"-"+i+"-"+frameIndex;
-          clip.setAttribute("id",clipId);clip.setAttribute("clipPathUnits","userSpaceOnUse");
-          for(const key of ["x","y","width","height"])rect.setAttribute(key,frame[key]);
-          clip.append(rect);defs.append(clip);picture.append(defs);
-          image.setAttribute("href",src);image.setAttribute("width",asset.sourceWidth);image.setAttribute("height",asset.sourceHeight);image.setAttribute("clip-path","url(#"+clipId+")");picture.append(image);figure.append(picture);$("photos").append(figure);
-        }
-      }else{
-        const figure=document.createElement("figure"),img=document.createElement("img");
-        img.src=src;img.alt=m.name+" フォーム "+(i+1);figure.append(img);$("photos").append(figure);
-      }
-    }
-    $("mediaEmpty").hidden=$("photos").childElementCount>0;
-  }
+function persist(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state))}
+function current(){return menus[index]}
+function format(ms){const sec=Math.max(0,Math.floor(ms/1000));return String(Math.floor(sec/60)).padStart(2,'0')+':'+String(sec%60).padStart(2,'0')}
+function viewport(){document.documentElement.style.setProperty('--app-height',Math.floor(window.visualViewport?.height||innerHeight)+'px')}
+viewport();addEventListener('resize',viewport);window.visualViewport?.addEventListener('resize',viewport);
+
+setTimeout(()=>{
+ $('openingScreen').hidden=true;document.body.classList.remove('opening');$('app').inert=false;
+},3000);
+setInterval(()=>{$('wallClock').textContent=new Date().toLocaleTimeString('ja-JP',{hour12:false})},1000);
+
+async function initialize(){
+ const data=await fetch('menus.json').then(r=>r.json());
+ const enriched=data.menus.map((menu,i)=>{
+  const edit=state.edits[menu.id]||{},config=trainingConfig[i];
+  return {...menu,...config,id:menu.id,name:edit.name||config.name,memo:edit.memo||config.memo,originalIndex:i};
+ });
+ menus=applyMenuOrder(enriched,state.order);state.order=menus.map(m=>m.id);persist();renderMenu();await renderCurrent();
 }
-function renderLogs(){
-  $("count").textContent=state.logs.length;$("logs").replaceChildren();
-  if(!state.logs.length){const p=document.createElement("p");p.className="empty";p.textContent="終了・メニュー移動時に自動保存されます。";$("logs").append(p);return}
-  for(const log of state.logs){
-    const el=document.createElement("article");el.className="log-entry";
-    const time=document.createElement("time"),d=new Date(log.startedAt);time.dateTime=d.toISOString();time.textContent=(d.getMonth()+1)+"/"+d.getDate()+" "+d.toLocaleTimeString("ja-JP",{hour12:false,hour:"2-digit",minute:"2-digit",second:"2-digit"});
-    const title=document.createElement("h3");title.textContent=log.name;
-    const comment=document.createElement("p");comment.textContent=log.memo||"気づきメモなし";
-    const duration=document.createElement("span");duration.className="log-duration";duration.textContent="実施時間 "+formatDuration(log.duration);
-    el.append(time,title,comment,duration);$("logs").append(el);
-  }
+
+function renderMenu(){
+ $('menuList').replaceChildren();
+ menus.forEach((menu,i)=>{
+  const li=document.createElement('li'),button=document.createElement('button');
+  button.type='button';button.textContent=(i+1)+'. '+menu.name;button.className=i===index?'selected':'';
+  button.onclick=()=>selectMenu(i);li.append(button);$('menuList').append(li);
+ });
 }
-let voiceOn=false,speechGeneration=0,memoReading=false,lastSpokenSecond=null,advancing=false;
-function cancelNarration(){speechGeneration++;memoReading=false;lastSpokenSecond=null;window.speechSynthesis?.cancel()}
-function speak(text,onend){
-  if(!voiceOn||!window.speechSynthesis||!window.SpeechSynthesisUtterance)return false;
-  const generation=speechGeneration,utterance=new SpeechSynthesisUtterance(text);utterance.lang="ja-JP";utterance.rate=1.15;
-  const voice=window.speechSynthesis.getVoices().find(v=>v.lang.startsWith("ja"));if(voice)utterance.voice=voice;
-  utterance.onend=()=>{if(generation===speechGeneration)onend?.()};
-  utterance.onerror=e=>{if(generation!==speechGeneration)return;memoReading=false;if(!["canceled","interrupted"].includes(e.error))notify("音声を再生できません。音量をご確認ください。時間計測は継続します。")};
-  window.speechSynthesis.speak(utterance);return true;
+async function selectMenu(next){
+ if(next<0||next>=menus.length)return;
+ index=next;startedAt=performance.now();renderMenu();await renderCurrent();
+ if(started&&!running){running=true;startedAt=performance.now();loop()}
 }
-function readTrainingMemo(){
-  cancelNarration();if(!voiceOn)return;
-  const fields=summaryFields();memoReading=true;
-  const s=session(),seconds=s.limitMs/1000;
-  if(!speak([fields.prescription,fields.tip,fields.learning,seconds?"設定時間は"+seconds+"秒です。":"時間指定なしです。"].join("。"),()=>{memoReading=false;readRemaining()})){
-    memoReading=false;notify("音声読み上げに対応していません。画面で時間を確認できます。");
-  }
+async function renderCurrent(){
+ const token=++renderToken,menu=current();if(!menu)return;
+ $('name').textContent=menu.name;$('position').textContent=(index+1)+' / '+menus.length;$('memo').textContent=menu.memo;
+ renderTimeline(0);await renderMedia(menu,token);
 }
-function readRemaining(){
-  if(!current()||!voiceOn||memoReading||session().runningSince===null||!session().limitMs||window.speechSynthesis?.speaking||window.speechSynthesis?.pending)return;
-  const seconds=Math.max(0,Math.ceil((session().limitMs-elapsed(session()))/1000));
-  if(seconds>0&&seconds!==lastSpokenSecond){lastSpokenSecond=seconds;speak("残り"+seconds+"秒")}
+async function assetUrl(asset){return asset?.src||null}
+async function renderMedia(menu,token){
+ $('video').pause();$('video').removeAttribute('src');$('video').load();mediaUrls.forEach(URL.revokeObjectURL);mediaUrls=[];
+ $('video').hidden=true;$('photos').hidden=true;$('photos').replaceChildren();$('mediaEmpty').hidden=true;
+ if(menu.video){
+  $('mediaLabel').textContent='MOVIE';$('video').src=await assetUrl(menu.video);if(token!==renderToken)return;$('video').hidden=false;$('video').play().catch(()=>{});return;
+ }
+ $('mediaLabel').textContent='PHOTO';$('photos').hidden=false;
+ for(const [assetIndex,asset] of menu.images.entries()){
+  const src=await assetUrl(asset);if(token!==renderToken)return;
+  if(asset.frames?.length){
+   $('photos').classList.add('split');
+   asset.frames.forEach((frame,frameIndex)=>{
+    const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg'),image=document.createElementNS(ns,'image');
+    svg.setAttribute('viewBox',[frame.x,frame.y,frame.width,frame.height].join(' '));svg.setAttribute('role','img');svg.setAttribute('aria-label',menu.name+' 写真 '+(frameIndex+1));
+    image.setAttribute('href',src);image.setAttribute('width',asset.sourceWidth);image.setAttribute('height',asset.sourceHeight);svg.append(image);$('photos').append(svg);
+   });
+  }else{const img=new Image();img.src=src;img.alt=menu.name+' 写真 '+(assetIndex+1);$('photos').append(img)}
+ }
+ $('mediaEmpty').hidden=$('photos').childElementCount>0;
 }
-function tick(){
-  $("wallClock").textContent=new Date().toLocaleTimeString("ja-JP",{hour12:false,hour:"2-digit",minute:"2-digit",second:"2-digit"});
-  if(!current())return;const s=session(),running=s.runningSince!==null,ms=elapsed(s),limit=s.limitMs??timerSeconds(current(),state.menuNotes?.[current().id])*1000;
-  $("startStop").classList.toggle("running",running);$("startStop").textContent=running?"一時停止":"トレーニング開始";$("startStop").setAttribute("aria-pressed",String(running));
-  $("elapsed").textContent=formatDuration(ms);$("remaining").textContent=limit?formatDuration(Math.max(0,Math.ceil((limit-ms)/1000))*1000):"手動";
-  let progress=$("repProgress");if(!progress){progress=document.createElement("b");progress.id="repProgress";document.querySelector(".elapsed")?.append(progress)}
-  const cfg=summaryFields(),active=Math.max(0,ms-3000),cycle=Math.max(1,(cfg.perRepSeconds||1)*1000),rep=Math.min((cfg.repetitions||1),Math.floor(active/cycle)+1),set=Math.min((cfg.sets||1),Math.floor(active/(cycle*(cfg.repetitions||1)+30000))+1);progress.textContent=running?(ms<3000?"準備…":"セット "+set+" / "+(cfg.sets||1)+"・"+rep+"回目 / "+(cfg.repetitions||1)):"";
-  if(running&&ms>=3000&&rep!==s.lastRep){s.lastRep=rep;beep()}
-  if(running&&limit&&ms>=limit&&!advancing){
-    advancing=true;cancelNarration();s.accumulated=limit;s.runningSince=null;writeLog();
-    if(index<menus.length-1){move(index+1,true).finally(()=>{advancing=false})}
-    else{advancing=false;tick();notify("全メニューが完了しました。右上のトレーニング終了から結果を送信できます。")}
-    return;
-  }
-  if(running)readRemaining();
+
+function renderTimeline(elapsedMs){
+ const plan=normalizePlan(current()),active=slotAt(elapsedMs);$('timeline').replaceChildren();
+ plan.forEach((step,i)=>{
+  const cell=document.createElement('div');cell.className='timeline-cell '+(step.active?'active':'unused');
+  if(step.active&&i<active)cell.classList.add('done');if(step.active&&i===active)cell.classList.add('current');
+  const top=document.createElement('b'),bottom=document.createElement('span');top.textContent=step.top||'';bottom.textContent=step.bottom||'';cell.append(top,bottom);$('timeline').append(cell);
+ });
+ const cue=plan[Math.min(active,plan.length-1)];$('currentCue').textContent=running&&cue?.active?[cue.top,cue.bottom].filter(Boolean).join('・'):'';
 }
-$("audioToggle").onclick=()=>{
-  voiceOn=!voiceOn;$("audioToggle").textContent=voiceOn?"音声 ON":"音声 OFF";$("audioToggle").setAttribute("aria-checked",String(voiceOn));
-  if(voiceOn){window.speechSynthesis?.resume();if(current()&&session().runningSince!==null)readTrainingMemo()}else cancelNarration();
+function loop(now=performance.now()){
+ cancelAnimationFrame(raf);if(!running)return;
+ const elapsed=now-startedAt,duration=current().durationSeconds*1000;
+ $('elapsed').textContent=format(elapsed);renderTimeline(elapsed);
+ if(elapsed>=duration){advance();return}
+ raf=requestAnimationFrame(loop);
+}
+async function advance(){
+ running=false;cancelAnimationFrame(raf);
+ if(index>=menus.length-1){finish(true);return}
+ index++;startedAt=performance.now();renderMenu();await renderCurrent();running=true;loop();
+}
+function begin(){
+ if(started)return;started=true;running=true;startedAt=performance.now();
+ $('startWorkout').textContent='トレーニング実施中';$('startWorkout').disabled=true;$('statusText').textContent='実施中';loop();
+}
+function finish(completed=false){
+ running=false;cancelAnimationFrame(raf);$('finishDialog').close();$('app').hidden=true;$('completeScreen').hidden=false;
+ $('completeScreen').querySelector('p').textContent=completed?'15種目すべて完了しました。':'本日のトレーニングは終了です。';
+}
+$('startWorkout').onclick=begin;
+$('endWorkout').onclick=()=>{$('finishTitle').textContent='トレーニングを終了しますか？';$('finishMessage').textContent='現在の進行を終了します。';$('finishDialog').showModal()};
+$('cancelFinish').onclick=()=>$('finishDialog').close();$('confirmFinish').onclick=()=>finish(false);
+$('restart').onclick=()=>location.reload();
+
+function openEditor(){const menu=current();$('editName').value=menu.name;$('editMemo').value=menu.memo;$('editDialog').showModal();$('editName').focus()}
+$('instructions').onclick=openEditor;
+$('editForm').onsubmit=event=>{
+ event.preventDefault();const menu=current(),name=$('editName').value.trim(),memo=$('editMemo').value.trim();if(!name||!memo)return;
+ menu.name=name;menu.memo=memo;state.edits[menu.id]={name,memo};persist();$('editDialog').close();renderMenu();renderCurrent();
 };
-$("startStop").onclick=toggleTraining;
-$("prev").onclick=()=>move(index-1);$("next").onclick=()=>move(index+1);
-let draftOrder=[],editingOrder=false,handleDrag=null,dragFrame=null,keyboardGrab=null;
-const handleIcon='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="5" r="1.5"/><circle cx="16" cy="5" r="1.5"/><circle cx="8" cy="12" r="1.5"/><circle cx="16" cy="12" r="1.5"/><circle cx="8" cy="19" r="1.5"/><circle cx="16" cy="19" r="1.5"/></svg>';
-function markOrderChanged(){editingOrder=true;$("saveOrder").hidden=false;$("cancelOrder").textContent="キャンセル";$("orderError").textContent=""}
-function syncRowOrder(){
-  draftOrder=[...$("menuRows").children].map(row=>row.dataset.id);
-  [...$("menuRows").children].forEach((row,i)=>{row.querySelector(".menu-choice").textContent=(i+1)+". "+menus.find(m=>m.id===row.dataset.id).name});
+$('cancelEdit').onclick=()=>$('editDialog').close();
+
+let drag=null;
+function fillDialog(){
+ $('menuRows').replaceChildren();
+ menus.forEach((menu,i)=>{
+  const row=document.createElement('div'),choose=document.createElement('button'),handle=document.createElement('button');
+  row.className='menu-row'+(i===index?' selected':'');row.dataset.id=menu.id;
+  choose.type='button';choose.className='menu-choice';choose.textContent=(i+1)+'. '+menu.name;choose.onclick=()=>{$('menuDialog').close();selectMenu(menus.findIndex(m=>m.id===menu.id))};
+  handle.type='button';handle.className='drag-handle';handle.setAttribute('aria-label',menu.name+'を並べ替え');handle.textContent='⠿';
+  handle.onpointerdown=e=>{e.preventDefault();drag={row,pointerId:e.pointerId};handle.setPointerCapture(e.pointerId);row.classList.add('dragging')};
+  handle.onpointermove=e=>{if(!drag||drag.pointerId!==e.pointerId)return;const target=document.elementFromPoint(e.clientX,e.clientY)?.closest('.menu-row');if(target&&target!==row){const rect=target.getBoundingClientRect();target.parentNode.insertBefore(row,e.clientY<rect.top+rect.height/2?target:target.nextSibling)}};
+  handle.onpointerup=()=>{if(!drag)return;const currentId=current().id;row.classList.remove('dragging');drag=null;const ids=[...$('menuRows').children].map(el=>el.dataset.id);menus=ids.map(id=>menus.find(m=>m.id===id));index=menus.findIndex(m=>m.id===currentId);state.order=ids;persist();fillDialog();renderMenu()};
+  row.append(choose,handle);$('menuRows').append(row);
+ });
 }
-function moveRowTo(row,targetIndex){
-  const rows=[...$("menuRows").children],from=rows.indexOf(row),to=Math.max(0,Math.min(rows.length-1,targetIndex));if(from===to)return;
-  if(to>from)rows[to].after(row);else rows[to].before(row);
-  if(handleDrag?.row===row){try{handleDrag.handle.setPointerCapture(handleDrag.pointerId)}catch{}}else if(keyboardGrab?.id===row.dataset.id)row.querySelector(".sort-handle").focus();
-  syncRowOrder();markOrderChanged();$("orderStatus").textContent=menus.find(m=>m.id===row.dataset.id).name+"を"+(to+1)+"番目へ移動しました。";
-}
-function dragAt(y){
-  if(!handleDrag)return;const list=$("menuRows"),bounds=list.getBoundingClientRect(),rows=[...list.children],row=handleDrag.row;
-  const target=rows.find(r=>{const b=r.getBoundingClientRect();return y>=b.top&&y<=b.bottom});
-  if(target&&target!==row){const from=rows.indexOf(row),to=rows.indexOf(target),b=target.getBoundingClientRect();if((to>from&&y>b.top+b.height/2)||(to<from&&y<b.top+b.height/2))moveRowTo(row,to)}
-  handleDrag.y=y;
-}
-function scrollDrag(){
-  if(!handleDrag)return;const list=$("menuRows"),b=list.getBoundingClientRect(),y=handleDrag.y;
-  if(y<b.top+32)list.scrollTop-=7;else if(y>b.bottom-32)list.scrollTop+=7;
-  dragAt(Math.max(b.top+2,Math.min(b.bottom-2,y)));handleDrag.y=y;dragFrame=requestAnimationFrame(scrollDrag);
-}
-function finishHandleDrag(cancel=false){
-  if(!handleDrag)return;const drag=handleDrag;handleDrag=null;cancelAnimationFrame(dragFrame);dragFrame=null;
-  drag.row.classList.remove("sorting");drag.handle.setAttribute("aria-pressed","false");
-  try{drag.handle.releasePointerCapture(drag.pointerId)}catch{}
-  if(cancel){draftOrder=drag.before;editingOrder=drag.wasEditing;fillMenuRows();$("orderStatus").textContent="移動を取り消しました。"}
-}
-function fillMenuRows(){
-  $("menuRows").replaceChildren();$("menuTitle").textContent="トレーニングを選択・並べ替え";
-  $("menuHint").textContent="種目名で移動。右のハンドルをつかんで順番を変更し、保存してください。キーボードはハンドルでSpace、矢印で移動、Enterで確定。";
-  $("saveOrder").hidden=!editingOrder;$("cancelOrder").textContent=editingOrder?"キャンセル":"閉じる";
-  draftOrder.forEach((id,i)=>{
-    const m=menus.find(m=>m.id===id),row=document.createElement("div"),choose=document.createElement("button"),handle=document.createElement("button");row.className="menu-row";row.dataset.id=id;row.classList.toggle("selected",id===current().id);
-    choose.type="button";choose.className="menu-choice";choose.textContent=(i+1)+". "+m.name;choose.onclick=()=>{if(editingOrder){$("orderError").textContent="順番を保存するか、キャンセルしてから種目を選んでください。";return}$("menuDialog").close();move(menus.findIndex(m=>m.id===id))};
-    handle.type="button";handle.className="sort-handle";handle.innerHTML=handleIcon;handle.setAttribute("aria-label",m.name+"の並べ替えハンドル");handle.setAttribute("aria-pressed","false");handle.title="つかんで上下に移動";
-    handle.onpointerdown=e=>{if(e.button!==0||handleDrag)return;e.preventDefault();keyboardGrab=null;handleDrag={handle,row,pointerId:e.pointerId,y:e.clientY,before:[...draftOrder],wasEditing:editingOrder};row.classList.add("sorting");handle.setAttribute("aria-pressed","true");handle.focus();try{handle.setPointerCapture(e.pointerId)}catch{};scrollDrag()};
-    handle.onpointermove=e=>{if(handleDrag?.pointerId===e.pointerId)dragAt(e.clientY)};
-    handle.onpointerup=e=>{if(handleDrag?.pointerId===e.pointerId)finishHandleDrag()};handle.onpointercancel=()=>finishHandleDrag(true);handle.onlostpointercapture=()=>finishHandleDrag(true);
-    handle.onkeydown=e=>{
-      if(e.key==="Escape"){if(handleDrag){e.preventDefault();e.stopPropagation();finishHandleDrag(true)}else if(keyboardGrab?.id===id){e.preventDefault();e.stopPropagation();draftOrder=keyboardGrab.before;editingOrder=keyboardGrab.wasEditing;keyboardGrab=null;fillMenuRows();$("orderStatus").textContent="移動を取り消しました。"}return}
-      if(e.key===" "||e.key==="Enter"){e.preventDefault();if(keyboardGrab?.id===id){keyboardGrab=null;handle.setAttribute("aria-pressed","false")}else{keyboardGrab={id,before:[...draftOrder],wasEditing:editingOrder};handle.setAttribute("aria-pressed","true")}return}
-      if(keyboardGrab?.id===id&&["ArrowUp","ArrowDown"].includes(e.key)){e.preventDefault();moveRowTo(row,[...$("menuRows").children].indexOf(row)+(e.key==="ArrowUp"?-1:1));row.scrollIntoView({block:"nearest"})}
-    };
-    row.append(choose,handle);$("menuRows").append(row);
-  });
-}
-function openMenu(){
-  if(!current()||$("menuDialog").open)return;
-  stopTraining();draftOrder=menus.map(m=>m.id);editingOrder=false;keyboardGrab=null;$("orderError").textContent="";$("orderStatus").textContent="";fillMenuRows();$("menuDialog").showModal();
-}
-$("name").onclick=openMenu;$("name").onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openMenu()}};
-$("menuDialog").addEventListener("cancel",()=>finishHandleDrag(true));$("menuDialog").addEventListener("close",()=>{finishHandleDrag();keyboardGrab=null});
-$("saveOrder").onclick=()=>{
-  const id=current().id,previous=state.menuOrder,previousSelected=state.selectedId;state.menuOrder=[...draftOrder];state.selectedId=id;if(!persist()){state.menuOrder=previous;state.selectedId=previousSelected;$("orderError").textContent="保存できませんでした。もう一度お試しください。";return}
-  menus=applyMenuOrder(menus,state.menuOrder);index=menus.findIndex(m=>m.id===id);$("menuDialog").close();render();notify("メニューの順番を保存しました。");
-};
-$("cancelOrder").onclick=()=>$("menuDialog").close();
-$("video").onerror=()=>{$("videoStatus").textContent="動画を読み込めません。再読み込みしてください。"};
-async function sendDailyReport(){
-  if(sendingReport||!current())return {ok:false};
-  stopTraining();
-  const report=buildDailyReport(state.logs);
-  if(!report.count){notify("今日のトレーニング記録がありません。");return {ok:false,error:"今日のトレーニング記録がありません。"}}
-  const fingerprint=JSON.stringify({subject:report.subject,body:report.body});
-  if(state.reportReceipts?.[report.dateKey]?.fingerprint===fingerprint){notify("今日の同じ内容のログは送信済みです。");return {ok:true,message:"今日の同じ内容のログは送信済みです。"}}
-  sendingReport=true;$("endWorkout").disabled=true;$("endWorkout").textContent="メール送信中…";notify("今日のログを送信しています。");
-  try{
-    const todayLogs=state.logs.filter(log=>buildDailyReport([log]).count>0);
-    const response=await fetch("/api/daily-report",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({logs:todayLogs}),signal:AbortSignal.timeout(30000)});
-    let result;try{result=await response.json()}catch{throw Error("送信結果を確認できませんでした。記録は端末に保存されています。")}
-    if(!response.ok||result.status!=="accepted"||typeof result.messageId!=="string")throw Error(result.error||"メールを送信できませんでした。記録は保存済みです。");
-    state.reportReceipts??={};state.reportReceipts[report.dateKey]={fingerprint,messageId:result.messageId,sentAt:Date.now()};persist();
-    notify(report.to+" 宛てのメール送信を受け付けました。記録："+report.count+"件");
-    return {ok:true,message:"furuta.ideas@gmail.com 宛てのメール送信を受け付けました。"};
-  }catch(error){const message=error.name==="TimeoutError"?"送信結果を確認できませんでした。記録は保存済みです。同じ内容で再試行できます。":error.message;notify(message);return {ok:false,error:message}}
-  finally{sendingReport=false;$("endWorkout").disabled=false;$("endWorkout").textContent="トレーニング終了"}
-}
-function closeWorkout(message){
-  stopTraining();$("video").pause();$("endDialog").close();$("closedMessage").textContent=message;
-  document.body.classList.add("workout-closed");$("closedScreen").hidden=false;
-  try{window.close()}catch{}
-}
-$("endWorkout").onclick=async()=>{
-  stopTraining();const report=buildDailyReport(state.logs);
-  $("finishClose").hidden=true;$("skipAndClose").hidden=false;$("endMessage").textContent="今日の記録："+report.count+"件。記録はこの端末に保存しました。";
-  $("sendAndClose").disabled=false;$("skipAndClose").disabled=false;$("cancelEnd").disabled=false;$("endDialog").showModal();
-  try{const r=await fetch("/api/mail-status");const status=await r.json();if(status.configured===false&&$("endDialog").open&&!sendingReport)$("endMessage").textContent+=" メール送信は未設定です。Resend APIキーの登録が必要です。"}catch{}
-};
-$("sendAndClose").onclick=async()=>{
-  $("sendAndClose").disabled=true;$("skipAndClose").disabled=true;$("cancelEnd").disabled=true;$("endMessage").textContent="メールを送信しています…";
-  const result=await sendDailyReport();
-  if(result.ok){$("endMessage").textContent=result.message;$("finishClose").hidden=false;$("finishClose").disabled=false;$("cancelEnd").disabled=false;$("skipAndClose").hidden=true;}
-  else{$("endMessage").textContent=(result.error||"送信できませんでした。")+" 記録は保存済みです。再試行するか、送信せず終了できます。";$("sendAndClose").disabled=false;$("skipAndClose").disabled=false;$("cancelEnd").disabled=false;}
-};
-$("finishClose").onclick=()=>closeWorkout($("endMessage").textContent);
-$("retryClose").onclick=()=>{try{window.close()}catch{}};
-$("skipAndClose").onclick=()=>closeWorkout("メールは送信していません。トレーニング記録はこの端末に保存されています。");
-$("cancelEnd").onclick=()=>$("endDialog").close();
-$("endDialog").addEventListener("cancel",event=>{if(sendingReport)event.preventDefault()});
-$("returnApp").onclick=()=>{document.body.classList.remove("workout-closed");$("closedScreen").hidden=true};
-window.addEventListener("pagehide",stopTraining);
-document.addEventListener("visibilitychange",()=>{if(document.hidden)stopTraining();else tick()});
-function upgradeDefaultSettings(){
-  if(state.defaultSettingsRevision===DEFAULT_SETTINGS_REVISION)return;
-  const builtInIds=new Set(menus.slice(0,trainingConfig.length).map(menu=>menu.id));
-  for(const [id,previous] of Object.entries(state.menuNotes||{})){
-    if(!builtInIds.has(id))continue;
-    state.previousTrainingSettings??={};
-    state.previousTrainingSettings[id]??=previous;
-    delete state.menuNotes[id];
-  }
-  state.defaultSettingsRevision=DEFAULT_SETTINGS_REVISION;
-}
-async function init(){
-  const response=await fetch("./menus.json");if(!response.ok)throw Error("メニューを取得できませんでした");
-  menus=(await response.json()).menus;const defaultTimers=[60,60,60,200,120,120,60,60,60,60,60,60,60,120,120];menus.forEach((m,i)=>Object.assign(m,trainingConfig[i]||{},{timerSeconds:defaultTimers[i]||60}));
-  try{const saved=JSON.parse(localStorage.getItem(KEY));if(saved&&Array.isArray(saved.logs)&&saved.sessions&&saved.learning)state=saved}catch{notify("端末保存データを読み込めませんでした。")}
-  upgradeDefaultSettings();
-  for(const s of Object.values(state.sessions))if(s.runningSince!==null)toggle(s);
-  persist();
-  try{await initDB();menus.push(...await request("menus","readonly",s=>s.getAll()))}catch{notify("追加教材の端末保存を読み込めませんでした。")}
-  for(const menu of menus)if(state.menuNotes?.[menu.id]?.name)menu.name=state.menuNotes[menu.id].name;
-  index=Math.max(0,menus.findIndex(m=>m.id===state.selectedId));
-  menus=applyMenuOrder(menus,state.menuOrder||[]);index=Math.max(0,menus.findIndex(m=>m.id===state.selectedId));
-  renderLogs();await render();setInterval(tick,250);
-}
-init().catch(error=>{notify(error.message+"。ページを再読み込みしてください。");$("name").textContent="教材の読み込みに失敗しました"});
+$('name').onclick=()=>{fillDialog();$('menuDialog').showModal()};$('closeMenu').onclick=()=>$('menuDialog').close();
+
+initialize().catch(error=>{console.error(error);$('memo').textContent='データを読み込めませんでした。再読み込みしてください。'});

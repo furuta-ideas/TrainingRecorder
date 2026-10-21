@@ -58,7 +58,8 @@ async function renderCurrent(){
 async function assetUrl(asset){return asset?.src||null}
 async function renderMedia(menu,token){
  $('video').pause();$('video').removeAttribute('src');$('video').load();mediaUrls.forEach(URL.revokeObjectURL);mediaUrls=[];
- $('video').hidden=true;$('photos').hidden=true;$('photos').replaceChildren();$('mediaEmpty').hidden=true;
+ $('video').hidden=true;$('photos').hidden=true;$('photos').replaceChildren();$('photos').classList.remove('split');$('mediaEmpty').hidden=true;
+ $('mediaStage').classList.toggle('has-video',Boolean(menu.video));$('mediaStage').classList.toggle('has-photos',!menu.video);
  if(menu.video){
   $('mediaLabel').textContent='MOVIE';$('video').src=await assetUrl(menu.video);if(token!==renderToken)return;$('video').hidden=false;$('video').play().catch(()=>{});return;
  }

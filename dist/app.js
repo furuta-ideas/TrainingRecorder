@@ -80,12 +80,13 @@ async function renderMedia(menu,token){
 function renderTimeline(elapsedMs){
  const plan=normalizePlan(current()),active=slotAt(elapsedMs);$('timeline').replaceChildren();
  plan.forEach((step,i)=>{
-  const cell=document.createElement('div');cell.className='timeline-cell '+(step.active?'active':'unused');
+  const isStandby=step.bottom==='スタンバイ',cell=document.createElement('div');cell.className='timeline-cell '+(step.active?'active':'unused')+(isStandby?' standby':'');
   if(step.active&&i<active)cell.classList.add('done');if(step.active&&i===active)cell.classList.add('current');
-  const top=document.createElement('b'),bottom=document.createElement('span');top.textContent=step.top||'';bottom.textContent=step.bottom||'';cell.append(top,bottom);$('timeline').append(cell);
+  const top=document.createElement('b'),bottom=document.createElement('span');top.textContent=step.top||'';bottom.textContent=wrapCue(step.bottom||'');cell.append(top,bottom);$('timeline').append(cell);
  });
  const cue=plan[Math.min(active,plan.length-1)];$('currentCue').textContent=running&&cue?.active?[cue.top,cue.bottom].filter(Boolean).join('・'):'';
 }
+function wrapCue(text){return ({'スタンバイ':'スタン\nバイ','スクワット':'スクワ\nット','ブリッジ':'ブリッ\nジ','プランク':'プラン\nク','水平運動':'水平\n運動','垂直運動':'垂直\n運動'}[text]||text)}
 function loop(now=performance.now()){
  cancelAnimationFrame(raf);if(!running)return;
  const elapsed=now-startedAt,duration=current().durationSeconds*1000;

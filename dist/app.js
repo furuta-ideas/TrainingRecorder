@@ -69,9 +69,9 @@ async function renderMedia(menu,token){
   if(asset.frames?.length){
    $('photos').classList.add('split');
    asset.frames.forEach((frame,frameIndex)=>{
-    const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg'),image=document.createElementNS(ns,'image');
-    svg.setAttribute('viewBox',[frame.x,frame.y,frame.width,frame.height].join(' '));svg.setAttribute('role','img');svg.setAttribute('aria-label',menu.name+' 写真 '+(frameIndex+1));
-    image.setAttribute('href',src);image.setAttribute('width',asset.sourceWidth);image.setAttribute('height',asset.sourceHeight);svg.append(image);$('photos').append(svg);
+    const crop=document.createElement('figure'),image=new Image();crop.className='photo-frame';crop.setAttribute('role','img');crop.setAttribute('aria-label',menu.name+' 写真 '+(frameIndex+1));
+    image.src=src;image.alt='';image.style.width=(asset.sourceWidth/frame.width*100)+'%';image.style.height=(asset.sourceHeight/frame.height*100)+'%';image.style.left=(-frame.x/frame.width*100)+'%';image.style.top=(-frame.y/frame.height*100)+'%';
+    crop.append(image);$('photos').append(crop);
    });
   }else{const img=new Image();img.src=src;img.alt=menu.name+' 写真 '+(assetIndex+1);$('photos').append(img)}
  }

@@ -69,9 +69,11 @@ async function renderMedia(menu,token){
   if(asset.frames?.length){
    $('photos').classList.add('split');
    asset.frames.forEach((frame,frameIndex)=>{
-    const crop=document.createElement('figure'),image=new Image();crop.className='photo-frame';crop.setAttribute('role','img');crop.setAttribute('aria-label',menu.name+' 写真 '+(frameIndex+1));
+    // figure=グリッドのセル、crop=写真本来の縦横比を保つ切り抜き枠（引き伸ばし防止）
+    const cell=document.createElement('figure'),crop=document.createElement('div'),image=new Image();cell.className='photo-frame';cell.setAttribute('role','img');cell.setAttribute('aria-label',menu.name+' 写真 '+(frameIndex+1));
+    crop.className='photo-crop';crop.style.setProperty('--ratio',String(frame.width/frame.height));
     image.src=src;image.alt='';image.style.width=(asset.sourceWidth/frame.width*100)+'%';image.style.height=(asset.sourceHeight/frame.height*100)+'%';image.style.left=(-frame.x/frame.width*100)+'%';image.style.top=(-frame.y/frame.height*100)+'%';
-    crop.append(image);$('photos').append(crop);
+    crop.append(image);cell.append(crop);$('photos').append(cell);
    });
   }else{const img=new Image();img.src=src;img.alt=menu.name+' 写真 '+(assetIndex+1);$('photos').append(img)}
  }
@@ -121,7 +123,30 @@ $('editForm').onsubmit=event=>{
 };
 $('cancelEdit').onclick=()=>$('editDialog').close();
 
-let drag=null;
+// 並べ替え：ドラッグ中の行（＝ポインターをキャプチャしたハンドルの親）はDOM上で動かさず、
+// 周囲の行を前後へ移す。行自体を移動するとキャプチャが外れ、pointerupが届かず順番が確定しないため。
+let drag=null,dragScroll=0;
+function dragTo(y){
+ if(!drag)return;const row=drag.row;drag.y=y;let other;
+ while((other=row.previousElementSibling)){const r=other.getBoundingClientRect();if(y<r.top+r.height/2)row.after(other);else break}
+ while((other=row.nextElementSibling)){const r=other.getBoundingClientRect();if(y>r.top+r.height/2)row.before(other);else break}
+}
+function startDrag(row,handle,e){
+ if(drag||(e.pointerType==='mouse'&&e.button!==0))return;
+ e.preventDefault();drag={row,handle,pointerId:e.pointerId,y:e.clientY};row.classList.add('dragging');
+ try{handle.setPointerCapture(e.pointerId)}catch{}
+ clearInterval(dragScroll);dragScroll=setInterval(()=>{
+  if(!drag)return;const dialog=$('menuDialog'),rect=dialog.getBoundingClientRect(),edge=56;
+  const step=drag.y<rect.top+edge?-10:drag.y>rect.bottom-edge?10:0;
+  if(step){dialog.scrollTop+=step;dragTo(drag.y)}
+ },16);
+}
+function endDrag(){
+ if(!drag)return;const {row,handle,pointerId}=drag,currentId=current().id;drag=null;clearInterval(dragScroll);row.classList.remove('dragging');
+ try{handle.releasePointerCapture(pointerId)}catch{}
+ const ids=[...$('menuRows').children].map(el=>el.dataset.id);menus=ids.map(id=>menus.find(m=>m.id===id));index=menus.findIndex(m=>m.id===currentId);
+ state.order=ids;persist();fillDialog();renderMenu();$('position').textContent=(index+1)+' / '+menus.length;
+}
 function fillDialog(){
  $('menuRows').replaceChildren();
  menus.forEach((menu,i)=>{
@@ -129,9 +154,12 @@ function fillDialog(){
   row.className='menu-row'+(i===index?' selected':'');row.dataset.id=menu.id;
   choose.type='button';choose.className='menu-choice';choose.textContent=(i+1)+'. '+menu.name;choose.onclick=()=>{$('menuDialog').close();selectMenu(menus.findIndex(m=>m.id===menu.id))};
   handle.type='button';handle.className='drag-handle';handle.setAttribute('aria-label',menu.name+'を並べ替え');handle.textContent='⠿';
-  handle.onpointerdown=e=>{e.preventDefault();drag={row,pointerId:e.pointerId};handle.setPointerCapture(e.pointerId);row.classList.add('dragging')};
-  handle.onpointermove=e=>{if(!drag||drag.pointerId!==e.pointerId)return;const target=document.elementFromPoint(e.clientX,e.clientY)?.closest('.menu-row');if(target&&target!==row){const rect=target.getBoundingClientRect();target.parentNode.insertBefore(row,e.clientY<rect.top+rect.height/2?target:target.nextSibling)}};
-  handle.onpointerup=()=>{if(!drag)return;const currentId=current().id;row.classList.remove('dragging');drag=null;const ids=[...$('menuRows').children].map(el=>el.dataset.id);menus=ids.map(id=>menus.find(m=>m.id===id));index=menus.findIndex(m=>m.id===currentId);state.order=ids;persist();fillDialog();renderMenu()};
+  handle.onpointerdown=e=>startDrag(row,handle,e);
+  handle.onpointermove=e=>{if(!drag||drag.pointerId!==e.pointerId)return;e.preventDefault();dragTo(e.clientY)};
+  handle.onpointerup=handle.onpointercancel=handle.onlostpointercapture=e=>{if(drag&&drag.pointerId===e.pointerId)endDrag()};
+  // iOS Safariでハンドル上のタッチがスクロールや長押しメニューに奪われないようにする
+  handle.addEventListener('touchstart',e=>e.preventDefault(),{passive:false});handle.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
+  handle.oncontextmenu=e=>e.preventDefault();
   row.append(choose,handle);$('menuRows').append(row);
  });
 }

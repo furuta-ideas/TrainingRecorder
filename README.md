@@ -1,6 +1,6 @@
 # ジムトレーニングアプリ
 
-iPhone・iPad向けの半自動トレーニングアプリです。公開URLは https://r-body-training-20261011.alive-badge-7126.chatgpt.site/ です。
+iPhone・iPad向けの半自動トレーニングアプリです。公開URLは https://furuta-ideas.github.io/TrainingRecorder/ です。`main` へ push すると GitHub Actions（`.github/workflows/pages.yml`）が `dist/` を自動で公開します。
 
 ## 動作
 

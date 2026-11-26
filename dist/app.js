@@ -3,21 +3,23 @@ import {normalizePlan,slotAt,applyMenuOrder} from './training.js';
 
 const $=id=>document.getElementById(id);
 const STORAGE_KEY='rbody-semi-auto-v1';
-let menus=[],index=0,running=false,started=false,startedAt=0,raf=0,renderToken=0,mediaUrls=[];
+let menus=[],baseMenus=[],index=0,running=false,started=false,startedAt=0,raf=0,renderToken=0,mediaUrls=[];
 let state=loadState();
 
 function loadState(){
  try{
   const saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}');
-  if(saved&&typeof saved==='object')return {order:Array.isArray(saved.order)?saved.order:[],edits:saved.edits&&typeof saved.edits==='object'?saved.edits:{}};
+  if(saved&&typeof saved==='object')return {order:Array.isArray(saved.order)?saved.order:[],edits:saved.edits&&typeof saved.edits==='object'?saved.edits:{},updatedAt:Number(saved.updatedAt)||0};
  }catch{}
  try{
   const legacy=JSON.parse(localStorage.getItem('rbody-records-v1')||'{}'),edits={};
   for(const [id,note] of Object.entries(legacy.menuNotes||{}))edits[id]={name:note.name,memo:[note.tip,note.learning].filter(Boolean).join('\n')};
-  return {order:Array.isArray(legacy.menuOrder)?legacy.menuOrder:[],edits};
- }catch{return {order:[],edits:{}}}
+  return {order:Array.isArray(legacy.menuOrder)?legacy.menuOrder:[],edits,updatedAt:0};
+ }catch{return {order:[],edits:{},updatedAt:0}}
 }
 function persist(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state))}
+// ユーザーの変更（メモ・種目名・並び順）を保存し、共有中なら他の端末へ送る
+function commit(){state.updatedAt=Date.now();persist();schedulePush()}
 function current(){return menus[index]}
 function format(ms){const sec=Math.max(0,Math.floor(ms/1000));return String(Math.floor(sec/60)).padStart(2,'0')+':'+String(sec%60).padStart(2,'0')}
 function viewport(){document.documentElement.style.setProperty('--app-height',Math.floor(window.visualViewport?.height||innerHeight)+'px')}
@@ -29,13 +31,18 @@ setTimeout(()=>{
 setInterval(()=>{$('wallClock').textContent=new Date().toLocaleTimeString('ja-JP',{hour12:false})},1000);
 
 async function initialize(){
- const data=await fetch('menus.json').then(r=>r.json());
- const enriched=data.menus.map((menu,i)=>{
+ baseMenus=(await fetch('menus.json').then(r=>r.json())).menus;
+ menus=buildMenus();state.order=menus.map(m=>m.id);persist();renderMenu();await renderCurrent();
+ pullRemote();
+}
+function buildMenus(){
+ const enriched=baseMenus.map((menu,i)=>{
   const edit=state.edits[menu.id]||{},config=trainingConfig[i];
   return {...menu,...config,id:menu.id,name:edit.name||config.name,memo:edit.memo||config.memo,originalIndex:i};
  });
- menus=applyMenuOrder(enriched,state.order);state.order=menus.map(m=>m.id);persist();renderMenu();await renderCurrent();
+ return applyMenuOrder(enriched,state.order);
 }
+function renderHeader(){const menu=current();if(!menu)return;$('name').textContent=menu.name;$('position').textContent=(index+1)+' / '+menus.length;$('memo').textContent=menu.memo}
 
 function renderMenu(){
  $('menuList').replaceChildren();
@@ -52,7 +59,7 @@ async function selectMenu(next){
 }
 async function renderCurrent(){
  const token=++renderToken,menu=current();if(!menu)return;
- $('name').textContent=menu.name;$('position').textContent=(index+1)+' / '+menus.length;$('memo').textContent=menu.memo;
+ renderHeader();
  renderTimeline(0);await renderMedia(menu,token);
 }
 async function assetUrl(asset){return asset?.src||null}
@@ -119,7 +126,7 @@ function openEditor(){const menu=current();$('editName').value=menu.name;$('edit
 $('instructions').onclick=openEditor;
 $('editForm').onsubmit=event=>{
  event.preventDefault();const menu=current(),name=$('editName').value.trim(),memo=$('editMemo').value.trim();if(!name||!memo)return;
- menu.name=name;menu.memo=memo;state.edits[menu.id]={name,memo};persist();$('editDialog').close();renderMenu();renderCurrent();
+ menu.name=name;menu.memo=memo;state.edits[menu.id]={name,memo};commit();$('editDialog').close();renderMenu();renderCurrent();
 };
 $('cancelEdit').onclick=()=>$('editDialog').close();
 
@@ -145,7 +152,7 @@ function endDrag(){
  if(!drag)return;const {row,handle,pointerId}=drag,currentId=current().id;drag=null;clearInterval(dragScroll);row.classList.remove('dragging');
  try{handle.releasePointerCapture(pointerId)}catch{}
  const ids=[...$('menuRows').children].map(el=>el.dataset.id);menus=ids.map(id=>menus.find(m=>m.id===id));index=menus.findIndex(m=>m.id===currentId);
- state.order=ids;persist();fillDialog();renderMenu();$('position').textContent=(index+1)+' / '+menus.length;
+ state.order=ids;commit();fillDialog();renderMenu();renderHeader();
 }
 function fillDialog(){
  $('menuRows').replaceChildren();
@@ -164,5 +171,62 @@ function fillDialog(){
  });
 }
 $('name').onclick=()=>{fillDialog();$('menuDialog').showModal()};$('closeMenu').onclick=()=>$('menuDialog').close();
+
+// ---- 端末間共有：合言葉ごとに、メモ・種目名・並び順をサーバーへ保存して同期する ----
+const SYNC_URL='https://training-recorder-sync.furuta-ideas.workers.dev',SYNC_STORAGE='rbody-sync-v1';
+let syncKey=localStorage.getItem(SYNC_STORAGE)||'',syncNote='',pushTimer=0;
+async function syncRequest(key,method,body){
+ const res=await fetch(SYNC_URL+'/state/'+key,{method,cache:'no-store',headers:body?{'Content-Type':'application/json'}:undefined,body:body?JSON.stringify(body):undefined});
+ if(res.status===404)return null;
+ if(!res.ok&&res.status!==409)throw new Error('sync '+res.status);
+ return res.json();
+}
+function syncDone(ok){syncNote=ok?'最終同期 '+new Date().toLocaleTimeString('ja-JP',{hour12:false}):'サーバーに接続できませんでした。通信できるときに自動で再試行します。';renderSync()}
+function schedulePush(){if(!syncKey)return;clearTimeout(pushTimer);pushTimer=setTimeout(pushRemote,500)}
+async function pushRemote(){
+ if(!syncKey)return;
+ try{const res=await syncRequest(syncKey,'PUT',state);if(res?.conflict)applyRemote(res.state);syncDone(true)}catch{syncDone(false)}
+}
+async function pullRemote(){
+ if(!syncKey||!baseMenus.length||started||drag||$('editDialog').open)return;
+ try{
+  const remote=await syncRequest(syncKey,'GET');
+  if(remote&&remote.updatedAt>state.updatedAt)applyRemote(remote);
+  else if(!remote||remote.updatedAt<state.updatedAt){await pushRemote();return}
+  syncDone(true);
+ }catch{syncDone(false)}
+}
+function applyRemote(remote){
+ const currentId=current()?.id;
+ state={order:Array.isArray(remote.order)?remote.order:[],edits:remote.edits&&typeof remote.edits==='object'?remote.edits:{},updatedAt:Number(remote.updatedAt)||0};
+ menus=buildMenus();state.order=menus.map(m=>m.id);persist();index=Math.max(0,menus.findIndex(m=>m.id===currentId));
+ renderMenu();renderHeader();if($('menuDialog').open)fillDialog();
+}
+async function hashPassphrase(text){
+ const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('training-recorder:'+text));
+ return [...new Uint8Array(bytes)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function renderSync(){
+ const on=Boolean(syncKey);
+ $('syncInfo').textContent=on?'共有中です。同じ合言葉を設定した端末と、メモ・種目名・並び順が自動で同期されます。':'スマホとiPadで同じ合言葉を設定すると、メモ・種目名・並び順を共有できます。合言葉は他の人に推測されにくいものにしてください。';
+ $('syncStatus').textContent=on?syncNote:'';$('syncLabel').hidden=on;$('syncStart').hidden=on;$('syncStop').hidden=!on;
+}
+$('openSync').onclick=()=>{$('menuDialog').close();$('syncPass').value='';renderSync();$('syncDialog').showModal()};
+$('syncClose').onclick=()=>$('syncDialog').close();
+$('syncStop').onclick=()=>{syncKey='';syncNote='';localStorage.removeItem(SYNC_STORAGE);renderSync()};
+$('syncForm').onsubmit=async event=>{
+ event.preventDefault();const pass=$('syncPass').value.trim();
+ if(pass.length<8){$('syncStatus').textContent='合言葉は8文字以上で入力してください。';return}
+ $('syncStart').disabled=true;$('syncStatus').textContent='接続しています…';
+ try{
+  const key=await hashPassphrase(pass),remote=await syncRequest(key,'GET');
+  if(remote&&!confirm('この合言葉の共有データが見つかりました。\nこの端末のメモ・種目名・並び順を、共有データの内容に置き換えます。よろしいですか？')){$('syncStatus').textContent='';return}
+  syncKey=key;localStorage.setItem(SYNC_STORAGE,key);
+  if(remote){applyRemote(remote);syncDone(true)}else{state.updatedAt=Date.now();persist();await pushRemote()}
+ }catch{$('syncStatus').textContent='サーバーに接続できませんでした。通信環境を確認して、もう一度お試しください。'}
+ finally{$('syncStart').disabled=false}
+};
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')pullRemote()});
+setInterval(()=>{if(document.visibilityState==='visible')pullRemote()},60000);
 
 initialize().catch(error=>{console.error(error);$('memo').textContent='データを読み込めませんでした。再読み込みしてください。'});

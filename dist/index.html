@@ -4,7 +4,7 @@
 <title>ジムトレーニングアプリ</title>
 <link rel="icon" type="image/png" sizes="32x32" href="icons/training-recorder-32.png"><link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png"><link rel="manifest" href="manifest.webmanifest?v=20261021">
 <meta name="apple-mobile-web-app-title" content="トレーニングレコーダー"><meta name="apple-mobile-web-app-capable" content="yes">
-<link rel="stylesheet" href="style.css?v=20261126-1">
+<link rel="stylesheet" href="style.css?v=20261126-2">
 </head><body class="opening">
 <section id="openingScreen" class="opening-screen" role="status" aria-label="オープニング">
  <img src="icons/opening-20261021.png" alt="トレーニングレコーダー ジムトレーニングアプリ">
@@ -27,8 +27,9 @@
  </main>
  <footer><div class="workout-status"><span id="statusText">スタンバイ</span><strong id="elapsed">00:00</strong><span id="currentCue"></span></div><button id="startWorkout" type="button">トレーニング開始</button></footer>
 </div>
-<dialog id="menuDialog"><h2>トレーニングを選択・並べ替え</h2><p>種目を選択できます。右のハンドルをドラッグして順番を変更できます。</p><div id="menuRows"></div><div class="dialog-actions"><button id="closeMenu" type="button">閉じる</button></div></dialog>
+<dialog id="menuDialog"><h2>トレーニングを選択・並べ替え</h2><p>種目を選択できます。右のハンドルをドラッグして順番を変更できます。</p><div id="menuRows"></div><div class="dialog-actions"><button id="closeMenu" type="button">閉じる</button><button id="openSync" type="button">端末間で共有…</button></div></dialog>
+<dialog id="syncDialog"><form id="syncForm"><h2>端末間で共有</h2><p id="syncInfo"></p><label id="syncLabel">合言葉（8文字以上）<input id="syncPass" maxlength="64" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></label><p id="syncStatus" class="sync-status" role="status"></p><div class="dialog-actions"><button id="syncStart" type="submit">共有を開始</button><button id="syncStop" type="button">共有を解除</button><button id="syncClose" type="button">閉じる</button></div></form></dialog>
 <dialog id="editDialog"><form id="editForm"><h2>種目名・メモを編集</h2><label>種目名<input id="editName" maxlength="80" required></label><label>トレーニングメモ<textarea id="editMemo" rows="4" maxlength="500" required></textarea></label><p>改行は2行まで表示されます。</p><div class="dialog-actions"><button type="submit">保存</button><button id="cancelEdit" type="button">キャンセル</button></div></form></dialog>
 <dialog id="finishDialog"><h2 id="finishTitle">トレーニングを終了しますか？</h2><p id="finishMessage">進行中のトレーニングを終了します。</p><div class="dialog-actions"><button id="confirmFinish" type="button">終了する</button><button id="cancelFinish" type="button">戻る</button></div></dialog>
 <section id="completeScreen" class="complete-screen" hidden><img src="icons/training-recorder-180.png" alt=""><h1>おつかれさまでした</h1><p>本日のトレーニングは終了です。</p><button id="restart" type="button">最初から始める</button></section>
-<script type="module" src="app.js?v=20261126-1"></script></body></html>
+<script type="module" src="app.js?v=20261126-2"></script></body></html>

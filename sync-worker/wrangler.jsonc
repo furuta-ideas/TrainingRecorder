@@ -1,0 +1,7 @@
+{
+  "name": "training-recorder-sync",
+  "main": "worker.js",
+  "compatibility_date": "2026-10-19",
+  "workers_dev": true,
+  "kv_namespaces": [{ "binding": "SYNC", "id": "9def57b674604254830d33ac98b36de5" }]
+}
